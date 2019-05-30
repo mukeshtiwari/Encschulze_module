@@ -14,7 +14,7 @@ Notation "'existsT' x .. y , p" :=
      format "'[' 'existsT' '/ ' x .. y , '/ ' p ']'") : type_scope.
 
   
-Module Cryptoaxioms (Import C : Cand) (Import K : Keys).
+Module Type CryptoAxioms (Import C : Cand) (Import K : Keys).
   
   (* Plain text is integer. *)
   Definition plaintext := Z.
@@ -238,5 +238,5 @@ Module Cryptoaxioms (Import C : Cand) (Import K : Keys).
          decrypt_message grp privatekey (compose f (projT1 pi) c).
 
   (* End of Axioms *)
-End Cryptoaxioms.
+End CryptoAxioms.
 

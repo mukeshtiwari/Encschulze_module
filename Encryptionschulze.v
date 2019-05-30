@@ -13,19 +13,20 @@ Require Import ValidityExist.
 Require Import Coq.Logic.FinFun.
 Require Import Coq.Program.Basics.
 Require Import Coq.Logic.FunctionalExtensionality.
-Require Import Psatz.
+Require Import Psatz.  
 Require Export CryptoAxioms.
 Require Export Cand.
+Require Export Keys.
 Import ListNotations.
 Open Scope Z. 
-
+ 
 
 Notation "'existsT' x .. y , p" :=
   (sigT (fun x => .. (sigT (fun y => p)) ..))
     (at level 200, x binder, right associativity,
      format "'[' 'existsT' '/ ' x .. y , '/ ' p ']'") : type_scope.
 
-Module Encschulze (Import C : Cand).
+Module Encschulze (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms C K).
   
     (* Decidability of pair of cand *)
     Lemma pair_cand_dec : forall (c d : cand * cand), {c = d} + {c <> d}.
@@ -60,7 +61,7 @@ Module Encschulze (Import C : Cand).
       apply cand_not_nil.
     Qed.
 
-      
+  
     (* A ballot is in matrix with all the entries are
        -1, 0 and 1 with no cyles *)
     Definition matrix_ballot_valid (p : pballot) :=

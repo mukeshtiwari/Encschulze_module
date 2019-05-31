@@ -184,8 +184,9 @@ End Crypto.
 
 (* The reason for separating the Axioms from functions is that these axioms
    no longer need to instantiate for extraction *)
-Module Type CAxioms (Import C : Cand) (Import K : Keys) (Import Crp : Crypto C K).
+Module CAxioms  (Import C : Cand) (Import K : Keys) (Import Crp : Crypto C K).
 
+  
   (* Import definitions from Def module *)
   Module D := Def C K.
   Import D.

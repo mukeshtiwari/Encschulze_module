@@ -27,10 +27,9 @@ Notation "'existsT' x .. y , p" :=
     (at level 200, x binder, right associativity,
      format "'[' 'existsT' '/ ' x .. y , '/ ' p ']'") : type_scope.
 
-Module Encschulze (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.Crypto C K).
+Module Encschulze (Import C : Cand) (Import K : Keys)  (Import Abst : Abstype)
+       (Import Crp : CryptoAxioms.Crypto C K Abst).
 
-  (* Bring definitions in this module *)
-  Import Crp.D.
   
   (* Decidability of pair of cand *)
   Lemma pair_cand_dec : forall (c d : cand * cand), {c = d} + {c <> d}.
@@ -178,16 +177,17 @@ Module Encschulze (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms
     pose proof (n H). auto.
   Defined.
 
-   
+
+  
   (* Returns true if v is row permutation of u by a permutation whose commitment is cpi *)
-  Definition verify_row_permutation_ballot grp
+  Definition verify_row_permutation_ballot (grp : Group)
              (u : eballot) (v : eballot)
              (cpi : Commitment) (zkppermuv : cand -> ShuffleZkp) : cand -> bool := 
     fun c => verify_shuffle grp (List.length cand_all)
                          cand_all (u c) (v c) cpi (zkppermuv c). 
       
   (* cth column of w is permutation of cth column of v by a permutation whose commitment is cpi *)  
-  Definition verify_col_permutation_ballot (grp : Crp.D.Group)
+  Definition verify_col_permutation_ballot (grp : Group)
              (v : eballot) (w : eballot)
              (cpi : Commitment) (zkppermvw  : cand -> ShuffleZkp) : cand ->  bool :=
     fun c => verify_shuffle grp (List.length cand_all)
@@ -262,26 +262,26 @@ Module Encschulze (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms
     
 
   (* Bring axioms from proof module *)
-  Module Pr := CryptoAxioms.CAxioms C K Crp.
+  Module Pr := CryptoAxioms.CAxioms C K Abst Crp.
   
   (* Bootstrapping the counting process *)
   Lemma ecount_all_ballot :
-    forall (bs : list eballot), existsT encm, ECount Crp.D.grp bs (epartial (bs, []) encm).
+    forall (bs : list eballot), existsT encm, ECount Crp.grp bs (epartial (bs, []) encm).
   Proof.
     intros.
-    remember (fun c d : cand => encrypt_message Crp.D.grp 0) as encm. exists encm.
-    pose proof (ecax Crp.D.grp bs bs encm
+    remember (fun c d : cand => encrypt_message Crp.grp 0) as encm. exists encm.
+    pose proof (ecax Crp.grp bs bs encm
                      (fun c d => 0)
                      (fun c d => construct_zero_knowledge_decryption_proof
-                                Crp.D.grp privatekey (encm c d))
+                                Crp.grp privatekey (encm c d))
                      eq_refl (fun c d => eq_refl)).
     assert (forall c d : cand,
                verify_zero_knowledge_decryption_proof
-                 Crp.D.grp ((fun _ _ : cand => 0) c d)
+                 Crp.grp ((fun _ _ : cand => 0) c d)
                  (encm c d)
                  ((fun _ _ : cand =>
                      construct_zero_knowledge_decryption_proof
-                       Crp.D.grp privatekey (encm c d)) c d) = true). 
+                       Crp.grp privatekey (encm c d)) c d) = true). 
     intros.  apply Pr.verify_honest_decryption_zkp. 
     symmetry.  rewrite Heqencm. apply Pr.decryption_deterministic.
     pose proof (X H). auto.
@@ -322,8 +322,8 @@ Module Encschulze (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms
      valid or not. If valid then add it to encrypted marging otherwise add it invalid  
      ballot list *)
   Lemma ppartial_count_all_counted bs : forall ts inbs m,
-      ECount Crp.D.grp bs (epartial (ts, inbs) m) ->
-      existsT i nm, (ECount Crp.D.grp bs (epartial ([], i) nm)).
+      ECount Crp.grp bs (epartial (ts, inbs) m) ->
+      existsT i nm, (ECount Crp.grp bs (epartial ([], i) nm)).
   Proof.    
     induction ts as [|u ts IHs].
     intros inbs m He.
@@ -332,24 +332,24 @@ Module Encschulze (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms
     (* The idea is u valid or not valid which can be shown via u -> (* row permutation *) -> v
        -> (* colume permutation *) -> w -> (* decryption *) -> b *)
     (* generate permutation pi to permute ballot*) 
-    remember (generatePermutation Crp.D.grp (List.length cand_all) cand_all) as pi.
+    remember (generatePermutation Crp.grp (List.length cand_all) cand_all) as pi.
     (* generate randomness S *)
-    remember (generateS Crp.D.grp (List.length cand_all)) as s.
+    remember (generateS Crp.grp (List.length cand_all)) as s.
     (* commit to this permutation  using randomness s*)
-    remember (generatePermutationCommitment Crp.D.grp (List.length cand_all) cand_all pi s) as cpi.
+    remember (generatePermutationCommitment Crp.grp (List.length cand_all) cand_all pi s) as cpi.
     (* generate zero knowledge proof of commitment *)
-    remember (zkpPermutationCommitment Crp.D.grp (List.length cand_all)
+    remember (zkpPermutationCommitment Crp.grp (List.length cand_all)
                                        cand_all pi cpi s) as zkpcpi.
     (* At this point I can assert that 
        verify_permutation_commitment grp (List.length cand_all) cpi zkpcpi = true 
        using the Axiom permutation_commitment_axiom *)
-    assert (verify_permutation_commitment Crp.D.grp (List.length cand_all) cpi zkpcpi = true).
+    assert (verify_permutation_commitment Crp.grp (List.length cand_all) cpi zkpcpi = true).
     pose proof (Pr.permutation_commitment_axiom
                   pi cpi s zkpcpi Heqcpi Heqzkpcpi). auto.
       
     (* Convert u -> rowpermute pi -> v *)
     (* Generate randomness to use in shuffle *)
-    remember (map (fun _ => generateR Crp.D.grp (List.length cand_all)) cand_all) as rrowlistvalues.
+    remember (map (fun _ => generateR Crp.grp (List.length cand_all)) cand_all) as rrowlistvalues.
     (* I have generated the randomness for each row and use them in shuffling. 
          It would be good idea to convert rlistvalues to rfunvalues by 
          using search_list function *)
@@ -360,12 +360,12 @@ Module Encschulze (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms
 
     (* get the ballot v by shuffling each row by pi and randomness R *)
     remember (fun c =>
-                shuffle Crp.D.grp (List.length cand_all)
+                shuffle Crp.grp (List.length cand_all)
                         cand_all dec_cand (u c) pi (rrowfunvalues c)) as v.
     (* construct zero knowledge proof of shuffle that v is row shuffle of u by pi
          using the same randomness R which used in shuffle *)
     remember (fun c =>
-                shuffle_zkp Crp.D.grp (List.length cand_all)
+                shuffle_zkp Crp.grp (List.length cand_all)
                             cand_all (u c) (v c) pi cpi s (rrowfunvalues c)) as zkppermuv.
     
     
@@ -373,18 +373,18 @@ Module Encschulze (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms
          The property here is construct matrix from u and v and comp
          This is bit tricky so I am leaving it for the moment because we need to 
          massage the axioms *)
-    assert (Ht1 : forall c, verify_row_permutation_ballot Crp.D.grp u v cpi zkppermuv c = true). 
+    assert (Ht1 : forall c, verify_row_permutation_ballot Crp.grp u v cpi zkppermuv c = true). 
     intros; unfold verify_row_permutation_ballot.
     pose proof (Pr.verify_shuffle_axiom pi cpi s (u c) (v c) (rrowfunvalues c) (zkppermuv c)
                                      Heqcpi).
-    assert (Hvr : v c = shuffle Crp.D.grp (List.length cand_all)
+    assert (Hvr : v c = shuffle Crp.grp (List.length cand_all)
                                 cand_all dec_cand (u c) pi (rrowfunvalues c)).
     rewrite Heqv; try auto.
     specialize (H1 Hvr). clear Hvr. rewrite Heqzkppermuv in H1.
     specialize (H1 eq_refl). rewrite Heqzkppermuv; try auto. 
 
     (* generate again the randomness R to make cryptography great again *)
-    remember (map (fun _ => generateR Crp.D.grp (List.length cand_all)) cand_all) as rcollistvalues.
+    remember (map (fun _ => generateR Crp.grp (List.length cand_all)) cand_all) as rcollistvalues.
     (* I have generated the randomness for each column and use them in shuffling. 
          It would be good idea to convert rcollistvalues to rcolfunvalues by 
          using search_list function *)
@@ -398,22 +398,22 @@ Module Encschulze (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms
          it fetches the cth column of v and permute them by pi, so t c is 
          permuted cth column of v. Important *)
     remember (fun c =>
-                shuffle Crp.D.grp (List.length cand_all)
+                shuffle Crp.grp (List.length cand_all)
                         cand_all dec_cand (fun d => v d c) pi (rcolfunvalues c)) as t. 
     remember (fun c d => t d c) as w. (* transpose t to get w in row form *)
         
     (* construct zero knowledge proof of shuffle that w is column permutation of v by pi *)
     remember (fun c =>
-                shuffle_zkp Crp.D.grp (List.length cand_all)
+                shuffle_zkp Crp.grp (List.length cand_all)
                             cand_all (fun d => v d c) (fun d => w d c) pi cpi s (rcolfunvalues c))
       as zkppermvw.
     
-    assert (Ht2 : forall c, verify_col_permutation_ballot Crp.D.grp v w cpi zkppermvw c = true).
+    assert (Ht2 : forall c, verify_col_permutation_ballot Crp.grp v w cpi zkppermvw c = true).
     intros. unfold verify_col_permutation_ballot. 
     pose proof (Pr.verify_shuffle_axiom pi cpi s (fun d => v d c) (fun d => w d c)
                                      (rcolfunvalues c) (zkppermvw c)  Heqcpi).
     rewrite Heqw in H2.
-    assert ((fun d => t c d) = shuffle Crp.D.grp (List.length cand_all)
+    assert ((fun d => t c d) = shuffle Crp.grp (List.length cand_all)
                                     cand_all dec_cand (fun d : cand => v d c) pi (rcolfunvalues c)).
     rewrite Heqt; try auto.
     specialize (H2 H3).
@@ -422,13 +422,13 @@ Module Encschulze (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms
 
       
     (* Now decrypt the ballot w. *)
-    remember (fun c d => decrypt_message Crp.D.grp privatekey (w c d)) as b.
+    remember (fun c d => decrypt_message Crp.grp privatekey (w c d)) as b.
     (* construct zero knowledge proof of decryption *)
     remember (fun c d => construct_zero_knowledge_decryption_proof
-                          Crp.D.grp privatekey (w c d)) as zkpdecw.
+                          Crp.grp privatekey (w c d)) as zkpdecw.
     (* Show that the zkpdecw is true b is honest decryption of w *)
     assert (Ht3 : forall c d, verify_zero_knowledge_decryption_proof
-                           Crp.D.grp (b c d) (w c d) (zkpdecw c d) = true).
+                           Crp.grp (b c d) (w c d) (zkpdecw c d) = true).
     intros c d. rewrite Heqzkpdecw.
     apply Pr.verify_honest_decryption_zkp. rewrite Heqb. reflexivity.
 
@@ -438,12 +438,12 @@ Module Encschulze (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms
          If b is not valid then it contains cycle and this reflects back to u *)
     destruct (matrix_ballot_valid_dec b) as [Hb | Hnb].
     (* Since b is valid so add the ballot u to margin m and call it nm *)
-    remember (fun c d => homomorphic_addition Crp.D.grp (u c d) (m c d)) as nm.
-    assert (Ht4 : forall c d, nm c d = homomorphic_addition Crp.D.grp (u c d) (m c d)).
+    remember (fun c d => homomorphic_addition Crp.grp (u c d) (m c d)) as nm.
+    assert (Ht4 : forall c d, nm c d = homomorphic_addition Crp.grp (u c d) (m c d)).
     intros c d.  rewrite Heqnm. reflexivity.
     
     (* ecvalid *) 
-    pose proof (ecvalid Crp.D.grp bs u v w b zkppermuv zkppermvw
+    pose proof (ecvalid Crp.grp bs u v w b zkppermuv zkppermvw
                         zkpdecw cpi zkpcpi ts m nm inbs He
                         Hb H Ht1 Ht2 Ht3 Ht4).
     (* Induction Hypothesis *)
@@ -451,7 +451,7 @@ Module Encschulze (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms
     exists inb, mrg. assumption.
     
     (* ecinvalid *)
-    pose proof (ecinvalid Crp.D.grp bs u v w b zkppermuv zkppermvw
+    pose proof (ecinvalid Crp.grp bs u v w b zkppermuv zkppermvw
                           zkpdecw cpi zkpcpi ts m inbs He Hnb H
                           Ht1 Ht2 Ht3).
     destruct (IHs (u :: inbs) m X) as [inb [mrg T]].
@@ -465,7 +465,7 @@ Module Encschulze (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms
   (* for every list of incoming ballots, we can progress the count to a state where all
      ballots are processed *)
   Lemma  pall_ballots_counted (bs : list eballot) :
-    existsT i m, ECount Crp.D.grp bs (epartial ([], i) m).
+    existsT i m, ECount Crp.grp bs (epartial ([], i) m).
   Proof.
     pose proof (ecount_all_ballot bs) as Hs.
     destruct Hs as [encm Heg].
@@ -477,13 +477,13 @@ Module Encschulze (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms
     
   (* We decrypt the encrypted margin to run the computation *)
   Lemma decrypt_margin (bs : list eballot) :
-    existsT m, ECount Crp.D.grp bs (edecrypt m).
+    existsT m, ECount Crp.grp bs (edecrypt m).
   Proof.
     remember (pall_ballots_counted bs) as Hc.
     destruct Hc as [i [m Hcount]].
-    remember (fun c d => decrypt_message Crp.D.grp privatekey (m c d)) as decm.
+    remember (fun c d => decrypt_message Crp.grp privatekey (m c d)) as decm.
     remember (fun c d => construct_zero_knowledge_decryption_proof
-                        Crp.D.grp privatekey (m c d)) as zkpdecm. 
+                        Crp.grp privatekey (m c d)) as zkpdecm. 
     exists decm.
     apply ecdecrypt with (inbs := i) (encm := m) (zkp := zkpdecm). 
     assumption.
@@ -495,11 +495,11 @@ Module Encschulze (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms
   (* The main theorem: for every list of ballots, we can find a boolean function that decides
      winners, together with evidences of the correctness of this determination *)
   Lemma pschulze_winners (bs : list eballot) :
-    existsT (f : cand -> bool), ECount Crp.D.grp bs (ewinners f).
+    existsT (f : cand -> bool), ECount Crp.grp bs (ewinners f).
   Proof.
     destruct (decrypt_margin bs) as [dm Hecount].
     exists (M.c_wins dm).
-    pose proof (ecfin Crp.D.grp bs dm (M.c_wins dm) (M.wins_loses_type_dec dm) Hecount).
+    pose proof (ecfin Crp.grp bs dm (M.c_wins dm) (M.wins_loses_type_dec dm) Hecount).
     pose proof (X (M.c_wins_true_type dm) (M.c_wins_false_type dm)).
     auto.
   Defined.
@@ -510,12 +510,13 @@ End Encschulze.
 (* Everthing below is connecting the plain text winner to ciphertext winner
        and ciphertext winner to plaintext winner *)
 
-Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.Crypto C K).
-  Module Pf := CryptoAxioms.CAxioms C K.
+Module Encproof (Import C : Cand) (Import K : Keys)  (Import Abst : Abstype)
+       (Import Crp : CryptoAxioms.Crypto C K Abst).
+  Module Pf := CryptoAxioms.CAxioms C K Abst.
   Module M := Schulze.Schulze C.
-  Module E := Encschulze C K Crp.
-  Import E M Crp.D.
-  
+  Module E := Encschulze C K Abst Crp.
+  Import M E.
+   
   (* Now Try to prove that result computed by schulze_winner 
        pschulze_winners are same if ballots match *)
   
@@ -552,7 +553,7 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
     split; intros.
     unfold map_ballot_pballot in H. destruct H.
     destruct H.  destruct H as [c H].
-    destruct (bool_of_sumbool (M.ballot_valid_dec b)).
+    destruct (bool_of_sumbool (ballot_valid_dec b)).
     simpl in H0. rewrite H0 in y.  pose proof (y c).  omega.
     destruct H as [H1 [H2 H3]].
     destruct (bool_of_sumbool (matrix_ballot_valid_dec p)).
@@ -563,7 +564,7 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
     destruct (bool_of_sumbool (matrix_ballot_valid_dec p)). simpl in *.
     rewrite H0 in y. congruence.
     destruct H as [H1 [H2 H3]].
-    destruct (bool_of_sumbool (M.ballot_valid_dec b)). simpl in *.
+    destruct (bool_of_sumbool (ballot_valid_dec b)). simpl in *.
     destruct x.  auto. destruct y. pose proof (H2 x). omega.
   Qed.
 
@@ -580,12 +581,12 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
     destruct (bool_of_sumbool (matrix_ballot_valid_dec p)).
     simpl in *. destruct x; congruence.
     destruct H. destruct H1.
-    destruct (bool_of_sumbool (M.ballot_valid_dec b)). simpl in *.
+    destruct (bool_of_sumbool (ballot_valid_dec b)). simpl in *.
     rewrite H0 in y. destruct y.  pose proof (H1 x0). omega.
     
     unfold map_ballot_pballot in H.
     destruct H. destruct H. destruct H as [c H].
-    destruct (bool_of_sumbool (M.ballot_valid_dec b)). simpl in *.
+    destruct (bool_of_sumbool (ballot_valid_dec b)). simpl in *.
     destruct x. pose proof (y c). omega. auto.
     destruct H. destruct H1.
     destruct (bool_of_sumbool (matrix_ballot_valid_dec p)).
@@ -597,7 +598,7 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
   
   Lemma margin_same_from_both_existential 
         (bs : list ballot) (ebs : list eballot) (pbs : list pballot)
-        (Ht : pbs = map (fun x => (fun c d => decrypt_message Crp.D.grp privatekey (x c d))) ebs)
+        (Ht : pbs = map (fun x => (fun c d => decrypt_message Crp.grp privatekey (x c d))) ebs)
         (H1 : mapping_ballot_pballot bs pbs) :
     forall (s : State),
       Count bs s ->
@@ -608,26 +609,26 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
           (ets : list eballot) (etinbs : list eballot)
           (tpbs : list pballot) (etpbs : list pballot)
           (em : cand -> cand -> ciphertext),
-    (ECount Crp.D.grp ebs (epartial (ets, etinbs) em) *
-     (m = fun c d => decrypt_message Crp.D.grp privatekey (em c d)) *
-     (tpbs =  map (fun x => (fun c d => decrypt_message Crp.D.grp privatekey (x c d))) ets) *
-     (etpbs =  map (fun x => (fun c d => decrypt_message Crp.D.grp privatekey (x c d))) etinbs) * 
+    (ECount Crp.grp ebs (epartial (ets, etinbs) em) *
+     (m = fun c d => decrypt_message Crp.grp privatekey (em c d)) *
+     (tpbs =  map (fun x => (fun c d => decrypt_message Crp.grp privatekey (x c d))) ets) *
+     (etpbs =  map (fun x => (fun c d => decrypt_message Crp.grp privatekey (x c d))) etinbs) * 
      mapping_ballot_pballot ts tpbs *
      mapping_ballot_pballot tinbs etpbs)%type.
   Proof.   
     intros s H.  
     (* induction on structure of H *)
     induction H. intros. inversion H.
-    remember (fun c d => encrypt_message Crp.D.grp (m c d)) as em.
+    remember (fun c d => encrypt_message Crp.grp (m c d)) as em.
     exists ebs, [], pbs, [], em.
-    pose proof (ecax Crp.D.grp ebs ebs em m
+    pose proof (ecax Crp.grp ebs ebs em m
                      (fun c d => construct_zero_knowledge_decryption_proof
-                                Crp.D.grp privatekey (em c d)) eq_refl e0).
+                                Crp.grp privatekey (em c d)) eq_refl e0).
     simpl in X.
     assert (forall c d : cand,
                verify_zero_knowledge_decryption_proof
-                 Crp.D.grp (m c d) (em c d)
-                 (construct_zero_knowledge_decryption_proof Crp.D.grp privatekey (em c d)) = true).
+                 Crp.grp (m c d) (em c d)
+                 (construct_zero_knowledge_decryption_proof Crp.grp privatekey (em c d)) = true).
     intros. subst. apply Pr.verify_honest_decryption_zkp. rewrite Pr.decryption_deterministic. auto.
     specialize (X H0). clear H0.
     repeat split. assumption.
@@ -666,21 +667,21 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
     rewrite Hets' in e1. 
     (*  ECount grp ebs (epartial (en :: ets', etinbs) em) 
           and u is valid then t is valid and it's encryption is valid *)
-    pose proof (ecvalid Crp.D.grp ebs).
+    pose proof (ecvalid Crp.grp ebs).
     (* u = en, v = row permutation of u, w is column permutation of v *)
     (* generate permutation *)  
-    remember (generatePermutation Crp.D.grp (List.length cand_all) cand_all) as pi.
+    remember (generatePermutation Crp.grp (List.length cand_all) cand_all) as pi.
     (* generate randomness S *)
-    remember  (generateS Crp.D.grp (List.length cand_all)) as s.
+    remember  (generateS Crp.grp (List.length cand_all)) as s.
     (* commit it *)
-    remember (generatePermutationCommitment Crp.D.grp (List.length cand_all) cand_all pi s) as cpi.
+    remember (generatePermutationCommitment Crp.grp (List.length cand_all) cand_all pi s) as cpi.
     (* generate zero knowledge proof of commitment *)
-    remember (zkpPermutationCommitment Crp.D.grp (List.length cand_all)
+    remember (zkpPermutationCommitment Crp.grp (List.length cand_all)
                                        cand_all pi cpi s) as zkpcpi. 
     (* At this point I can assert that 
          verify_permutation_commitment grp (List.length cand_all) cpi zkpcpi = true 
          using the Axiom permutation_commitment_axiom *)
-    assert (verify_permutation_commitment Crp.D.grp (List.length cand_all) cpi zkpcpi = true).
+    assert (verify_permutation_commitment Crp.grp (List.length cand_all) cpi zkpcpi = true).
     pose proof (Pr.permutation_commitment_axiom
                   pi cpi s zkpcpi Heqcpi Heqzkpcpi). auto.
     
@@ -689,7 +690,7 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
     (* Convert en -> rowpermute pi -> v *)
     (* What if i separate the R from shuffle ? *)
     (* This is what I am doing *)
-    remember (map (fun _ => generateR Crp.D.grp (List.length cand_all)) cand_all) as rrowlistvalues.
+    remember (map (fun _ => generateR Crp.grp (List.length cand_all)) cand_all) as rrowlistvalues.
     (* I have generated the randomness for each row and use them in shuffling. 
          It would be good idea to convert rlistvalues to rfunvalues by 
          using search_list function *)
@@ -702,12 +703,12 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
          in Shuffle *)
     (* get the ballot v by shuffling each row by pi and randomness R *)
     remember (fun c =>
-                shuffle Crp.D.grp (List.length cand_all)
+                shuffle Crp.grp (List.length cand_all)
                         cand_all dec_cand (en c) pi (rrowfunvalues c)) as v.
     (* construct zero knowledge proof of shuffle that v is row shuffle of u by pi
          using the same randomness R which used in shuffle *)
     remember (fun c =>
-                shuffle_zkp Crp.D.grp (List.length cand_all)
+                shuffle_zkp Crp.grp (List.length cand_all)
                             cand_all (en c) (v c) pi cpi s (rrowfunvalues c)) as zkppermuv.
     
     
@@ -715,11 +716,11 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
          The property here is construct matrix from u and v and comp
          This is bit tricky so I am leaving it for the moment because we need to 
          massage the axioms *)
-    assert (Ht1 : forall c, verify_row_permutation_ballot Crp.D.grp en v cpi zkppermuv c = true). 
+    assert (Ht1 : forall c, verify_row_permutation_ballot Crp.grp en v cpi zkppermuv c = true). 
     intros; unfold verify_row_permutation_ballot.
     pose proof (Pr.verify_shuffle_axiom pi cpi s (en c) (v c) (rrowfunvalues c) (zkppermuv c)
                                      Heqcpi).
-    assert (Hvr : v c = shuffle Crp.D.grp (List.length cand_all)
+    assert (Hvr : v c = shuffle Crp.grp (List.length cand_all)
                                 cand_all dec_cand (en c) pi (rrowfunvalues c)).
     rewrite Heqv; try auto.
     specialize (H11 Hvr). clear Hvr. rewrite Heqzkppermuv in H11.
@@ -728,7 +729,7 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
     
     
     (* generate again the randomness R to make sure that cryptographic sprit is high *)
-    remember (map (fun _ => generateR Crp.D.grp (List.length cand_all)) cand_all) as rcollistvalues.
+    remember (map (fun _ => generateR Crp.grp (List.length cand_all)) cand_all) as rcollistvalues.
     (* I have generated the randomness for each column and use them in shuffling. 
          It would be good idea to convert rcollistvalues to rcolfunvalues by 
          using search_list function *)
@@ -743,22 +744,22 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
          it fetches the cth column of v and permute them by pi, so t c is 
          permuted cth column of v. Important *)
     remember (fun c =>
-                shuffle Crp.D.grp (List.length cand_all)
+                shuffle Crp.grp (List.length cand_all)
                         cand_all dec_cand (fun d => v d c) pi (rcolfunvalues c)) as tt. 
     remember (fun c d => tt d c) as w. (* transpose t to get w in row form *)
     
     (* construct zero knowledge proof of shuffle that w is column permutation of v by pi *)
     remember (fun c =>
-                shuffle_zkp Crp.D.grp (List.length cand_all)
+                shuffle_zkp Crp.grp (List.length cand_all)
                             cand_all (fun d => v d c) (fun d => w d c) pi cpi s (rcolfunvalues c))
       as zkppermvw.
     
-    assert (Ht2 : forall c, verify_col_permutation_ballot Crp.D.grp v w cpi zkppermvw c = true).
+    assert (Ht2 : forall c, verify_col_permutation_ballot Crp.grp v w cpi zkppermvw c = true).
     intros. unfold verify_col_permutation_ballot. 
     pose proof (Pr.verify_shuffle_axiom pi cpi s (fun d => v d c) (fun d => w d c)
                                      (rcolfunvalues c) (zkppermvw c)  Heqcpi).
     rewrite Heqw in H12.
-    assert ((fun d => tt c d) = shuffle Crp.D.grp (List.length cand_all)
+    assert ((fun d => tt c d) = shuffle Crp.grp (List.length cand_all)
                                      cand_all dec_cand (fun d : cand => v d c) pi (rcolfunvalues c)).
     rewrite Heqtt; try auto.
     specialize (H12 H13).
@@ -768,13 +769,13 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
     
     
     (* Now decrypt the ballot w *)
-    remember (fun c d => decrypt_message Crp.D.grp privatekey (w c d)) as b.
+    remember (fun c d => decrypt_message Crp.grp privatekey (w c d)) as b.
     (* construct zero knowledge proof of decryption *)
     remember (fun c d => construct_zero_knowledge_decryption_proof
-                        Crp.D.grp privatekey (w c d)) as zkpdecw.
+                        Crp.grp privatekey (w c d)) as zkpdecw.
     (* Show that the zkpdecw is true b is honest decryption of w *)
     assert (Ht3 : forall c d, verify_zero_knowledge_decryption_proof
-                           Crp.D.grp (b c d) (w c d) (zkpdecw c d) = true).
+                           Crp.grp (b c d) (w c d) (zkpdecw c d) = true).
     intros c d. rewrite Heqzkpdecw.
     apply Pr.verify_honest_decryption_zkp. rewrite Heqb. reflexivity.
     
@@ -799,25 +800,25 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
     destruct pi as [pi Sig].
     
     (* Each row of v is shuffle of each row of en by permutation pi *)      
-    assert (forall c d, t c d = decrypt_message Crp.D.grp privatekey (en c d)).
+    assert (forall c d, t c d = decrypt_message Crp.grp privatekey (en c d)).
     intros. rewrite H6. auto.
     
     (* Interpretation of permutation. v c d = en c (pi d) and it means 
          that element at '(pi d)' position in cth row of en goes to 'd' position of cth row in v *) 
-    assert (forall c d, decrypt_message Crp.D.grp privatekey (v c d) =
-                   decrypt_message Crp.D.grp privatekey (en c (pi d))). 
+    assert (forall c d, decrypt_message Crp.grp privatekey (v c d) =
+                   decrypt_message Crp.grp privatekey (en c (pi d))). 
     rewrite Heqv. intros. 
-    assert (shuffle Crp.D.grp (List.length cand_all) cand_all dec_cand (en c)
+    assert (shuffle Crp.grp (List.length cand_all) cand_all dec_cand (en c)
                     (existT (fun pi : cand -> cand => Bijective pi) pi Sig) (rrowfunvalues c) = v c).
     rewrite Heqv. auto.
     rewrite H13. eapply Pr.shuffle_perm in H13. 
     unfold compose in H13.
     instantiate (1 := d) in H13. simpl in H13. assumption.
     
-    assert (forall c d, decrypt_message Crp.D.grp privatekey (w c d) =
-                   decrypt_message Crp.D.grp privatekey (v (pi c) d)).  
+    assert (forall c d, decrypt_message Crp.grp privatekey (w c d) =
+                   decrypt_message Crp.grp privatekey (v (pi c) d)).  
     rewrite Heqw. intros. rewrite Heqtt.
-    assert (shuffle Crp.D.grp (List.length cand_all) cand_all dec_cand (fun d0 : cand => v d0 d)
+    assert (shuffle Crp.grp (List.length cand_all) cand_all dec_cand (fun d0 : cand => v d0 d)
                     (existT (fun pi0 : cand -> cand => Bijective pi0) pi Sig) (rcolfunvalues d) =
             fun d0 => w d0 d).
     rewrite Heqw. rewrite Heqtt. auto.
@@ -825,8 +826,8 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
     unfold compose in H14.
     instantiate (1 := c) in H14. cbn in H14. auto.
     
-    assert (forall c d, decrypt_message Crp.D.grp privatekey (w c d) =
-                   decrypt_message Crp.D.grp privatekey (en (pi c) (pi d))).
+    assert (forall c d, decrypt_message Crp.grp privatekey (w c d) =
+                   decrypt_message Crp.grp privatekey (en (pi c) (pi d))).
     intros. rewrite  H14. rewrite H13. auto.
     
     
@@ -845,17 +846,17 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
     specialize (X en v w b zkppermuv zkppermvw zkpdecw cpi
                   zkpcpi ets' em
                   (fun c d : cand => homomorphic_addition
-                                    Crp.D.grp (en c d) (em c d))
+                                    Crp.grp (en c d) (em c d))
                   etinbs e1 H12 H9 Ht1 Ht2 Ht3).
     simpl in X.
     assert ((forall c d : cand,
-                homomorphic_addition Crp.D.grp (en c d) (em c d) =
-                homomorphic_addition Crp.D.grp (en c d) (em c d))).
+                homomorphic_addition Crp.grp (en c d) (em c d) =
+                homomorphic_addition Crp.grp (en c d) (em c d))).
     auto.
     specialize (X H13).
     (*  ECount grp ebs
         (epartial (ets', etinbs) (fun c d : cand => homomorphic_addition grp (en c d) (em c d))) *)
-    exists ets', etinbs, tbps', etpbs, (fun c d : cand => homomorphic_addition Crp.D.grp (en c d) (em c d)).
+    exists ets', etinbs, tbps', etpbs, (fun c d : cand => homomorphic_addition Crp.grp (en c d) (em c d)).
     repeat split. auto. 
     apply functional_extensionality. intros.
     apply functional_extensionality. intros.
@@ -863,9 +864,9 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
     rewrite H14.
     (*  m = (fun c d : cand => decrypt_message grp privatekey (em c d))
            H6 : t = (fun c d : cand => decrypt_message grp privatekey (en c d)) *)
-    assert (t x x0 = decrypt_message Crp.D.grp privatekey (en x x0)).
+    assert (t x x0 = decrypt_message Crp.grp privatekey (en x x0)).
     rewrite H6. auto.
-    assert (m x x0 = decrypt_message Crp.D.grp privatekey (em x x0)).
+    assert (m x x0 = decrypt_message Crp.grp privatekey (em x x0)).
     rewrite e2. auto.
     rewrite <- H15. rewrite <- H16.
     rewrite <- H5.
@@ -928,18 +929,18 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
     (* ecinvalid *)
     
     (* generate permutation *)  
-    remember (generatePermutation Crp.D.grp (List.length cand_all) cand_all) as pi.
+    remember (generatePermutation Crp.grp (List.length cand_all) cand_all) as pi.
     (* generate randomness S *)
-    remember (generateS Crp.D.grp (List.length cand_all)) as s.
+    remember (generateS Crp.grp (List.length cand_all)) as s.
     (* commit it *)
-    remember (generatePermutationCommitment Crp.D.grp (List.length cand_all) cand_all pi s) as cpi.
+    remember (generatePermutationCommitment Crp.grp (List.length cand_all) cand_all pi s) as cpi.
     (* generate zero knowledge proof of commitment *)
-    remember (zkpPermutationCommitment Crp.D.grp (List.length cand_all)
+    remember (zkpPermutationCommitment Crp.grp (List.length cand_all)
                                        cand_all pi cpi s) as zkpcpi. 
     (* At this point I can assert that 
          verify_permutation_commitment grp (List.length cand_all) cpi zkpcpi = true 
          using the Axiom permutation_commitment_axiom *)
-    assert (verify_permutation_commitment Crp.D.grp (List.length cand_all) cpi zkpcpi = true).
+    assert (verify_permutation_commitment Crp.grp (List.length cand_all) cpi zkpcpi = true).
     pose proof (Pr.permutation_commitment_axiom
                   pi cpi s zkpcpi Heqcpi Heqzkpcpi). auto.
     
@@ -947,7 +948,7 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
     (* Convert en -> rowpermute pi -> v *)
     (* What if i separate the R from shuffle ? *)
     (* This is what I am doing *)
-    remember (map (fun _ => generateR Crp.D.grp (List.length cand_all)) cand_all) as rrowlistvalues.
+    remember (map (fun _ => generateR Crp.grp (List.length cand_all)) cand_all) as rrowlistvalues.
     (* I have generated the randomness for each row and use them in shuffling. 
          It would be good idea to convert rlistvalues to rfunvalues by 
          using search_list function *)
@@ -960,12 +961,12 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
          in Shuffle *)
     (* get the ballot v by shuffling each row by pi and randomness R *)
     remember (fun c =>
-                shuffle Crp.D.grp (List.length cand_all)
+                shuffle Crp.grp (List.length cand_all)
                           cand_all dec_cand (en c) pi (rrowfunvalues c)) as v.
     (* construct zero knowledge proof of shuffle that v is row shuffle of u by pi
          using the same randomness R which used in shuffle *)
     remember (fun c =>
-                shuffle_zkp Crp.D.grp (List.length cand_all)
+                shuffle_zkp Crp.grp (List.length cand_all)
                             cand_all (en c) (v c) pi cpi s (rrowfunvalues c)) as zkppermuv.
     
     
@@ -973,11 +974,11 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
          The property here is construct matrix from u and v and comp
          This is bit tricky so I am leaving it for the moment because we need to 
          massage the axioms *)
-    assert (Ht1 : forall c, verify_row_permutation_ballot Crp.D.grp en v cpi zkppermuv c = true). 
+    assert (Ht1 : forall c, verify_row_permutation_ballot Crp.grp en v cpi zkppermuv c = true). 
     intros; unfold verify_row_permutation_ballot.
     pose proof (Pr.verify_shuffle_axiom pi cpi s (en c) (v c) (rrowfunvalues c) (zkppermuv c)
                                      Heqcpi).
-    assert (Hvr : v c = shuffle Crp.D.grp (List.length cand_all)
+    assert (Hvr : v c = shuffle Crp.grp (List.length cand_all)
                                 cand_all dec_cand (en c) pi (rrowfunvalues c)).
     rewrite Heqv; try auto.
     specialize (H14 Hvr). clear Hvr. rewrite Heqzkppermuv in H14.
@@ -986,7 +987,7 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
     
     
     (* generate again the randomness R to make sure that cryptographic sprit is high *)
-    remember (map (fun _ => generateR Crp.D.grp (List.length cand_all)) cand_all) as rcollistvalues.
+    remember (map (fun _ => generateR Crp.grp (List.length cand_all)) cand_all) as rcollistvalues.
     (* I have generated the randomness for each column and use them in shuffling. 
          It would be good idea to convert rcollistvalues to rcolfunvalues by 
          using search_list function *)
@@ -1001,22 +1002,22 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
          it fetches the cth column of v and permute them by pi, so t c is 
          permuted cth column of v. Important *)
     remember (fun c =>
-                shuffle Crp.D.grp (List.length cand_all)
+                shuffle Crp.grp (List.length cand_all)
                         cand_all dec_cand (fun d => v d c) pi (rcolfunvalues c)) as tt. 
     remember (fun c d => tt d c) as w. (* transpose t to get w in row form *)
     
     (* construct zero knowledge proof of shuffle that w is column permutation of v by pi *)
     remember (fun c =>
-                shuffle_zkp Crp.D.grp (List.length cand_all)
+                shuffle_zkp Crp.grp (List.length cand_all)
                             cand_all (fun d => v d c) (fun d => w d c) pi cpi s (rcolfunvalues c))
       as zkppermvw.
     
-    assert (Ht2 : forall c, verify_col_permutation_ballot Crp.D.grp v w cpi zkppermvw c = true).
+    assert (Ht2 : forall c, verify_col_permutation_ballot Crp.grp v w cpi zkppermvw c = true).
     intros. unfold verify_col_permutation_ballot. 
     pose proof (Pr.verify_shuffle_axiom pi cpi s (fun d => v d c) (fun d => w d c)
                                      (rcolfunvalues c) (zkppermvw c)  Heqcpi).
     rewrite Heqw in H15.
-    assert ((fun d => tt c d) = shuffle Crp.D.grp (List.length cand_all)
+    assert ((fun d => tt c d) = shuffle Crp.grp (List.length cand_all)
                                      cand_all dec_cand (fun d : cand => v d c) pi (rcolfunvalues c)).
     rewrite Heqtt; try auto.
     specialize (H15 H16).
@@ -1025,13 +1026,13 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
     
     
     (* Now decrypt the ballot w *)
-    remember (fun c d => decrypt_message Crp.D.grp privatekey (w c d)) as b.
+    remember (fun c d => decrypt_message Crp.grp privatekey (w c d)) as b.
     (* construct zero knowledge proof of decryption *)
     remember (fun c d => construct_zero_knowledge_decryption_proof
-                        Crp.D.grp privatekey (w c d)) as zkpdecw.
+                        Crp.grp privatekey (w c d)) as zkpdecw.
     (* Show that the zkpdecw is true b is honest decryption of w *)
     assert (Ht3 : forall c d, verify_zero_knowledge_decryption_proof
-                           Crp.D.grp (b c d) (w c d) (zkpdecw c d) = true).
+                           Crp.grp (b c d) (w c d) (zkpdecw c d) = true).
     intros c d. rewrite Heqzkpdecw.
     apply Pr.verify_honest_decryption_zkp. rewrite Heqb. reflexivity. 
     (* At this point we need Axioms which connects the validity of en to b 
@@ -1059,24 +1060,24 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
     destruct pi as [pi Sig]. 
     (* Each row of v is shuffle of each row of en by permutation pi *)
     
-    assert (forall c d, tp c d = decrypt_message Crp.D.grp privatekey (en c d)).
+    assert (forall c d, tp c d = decrypt_message Crp.grp privatekey (en c d)).
     intros. rewrite H11. auto.
     
     
-    assert (forall c d, decrypt_message Crp.D.grp privatekey (v c d) =
-                   decrypt_message Crp.D.grp privatekey (en c (pi d))). 
+    assert (forall c d, decrypt_message Crp.grp privatekey (v c d) =
+                   decrypt_message Crp.grp privatekey (en c (pi d))). 
     rewrite Heqv. intros. 
-    assert (shuffle Crp.D.grp (List.length cand_all) cand_all dec_cand (en c)
+    assert (shuffle Crp.grp (List.length cand_all) cand_all dec_cand (en c)
                     (existT (fun pi : cand -> cand => Bijective pi) pi Sig) (rrowfunvalues c) = v c).
     rewrite Heqv. auto.
     rewrite H18. eapply Pr.shuffle_perm in H18. 
     unfold compose in H18.
     instantiate (1 := d) in H18. simpl in H18. assumption.
     
-    assert (forall c d, decrypt_message Crp.D.grp privatekey (w c d) =
-                   decrypt_message Crp.D.grp privatekey (v (pi c) d)).   
+    assert (forall c d, decrypt_message Crp.grp privatekey (w c d) =
+                   decrypt_message Crp.grp privatekey (v (pi c) d)).   
     rewrite Heqw. intros. rewrite Heqtt.
-    assert (shuffle Crp.D.grp (List.length cand_all ) cand_all dec_cand (fun d0 : cand => v d0 d)
+    assert (shuffle Crp.grp (List.length cand_all ) cand_all dec_cand (fun d0 : cand => v d0 d)
                     (existT (fun pi0 : cand -> cand => Bijective pi0) pi Sig) (rcolfunvalues d) =
             fun d0 => w d0 d).
     rewrite Heqw. rewrite Heqtt. auto.
@@ -1084,8 +1085,8 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
     unfold compose in H19.
     instantiate (1 := c) in H19. cbn in H19. auto.
     
-    assert (forall c d, decrypt_message Crp.D.grp privatekey (w c d) =
-                   decrypt_message Crp.D.grp privatekey (en (pi c) (pi d))).
+    assert (forall c d, decrypt_message Crp.grp privatekey (w c d) =
+                   decrypt_message Crp.grp privatekey (en (pi c) (pi d))).
     intros. rewrite  H19. rewrite H18. auto.
     
       
@@ -1106,7 +1107,7 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
     rewrite H21 in H22.  rewrite Hg2 in H22.
     rewrite Hg2 in H22. auto.
     
-    pose proof (ecinvalid Crp.D.grp ebs en v w b zkppermuv zkppermvw zkpdecw cpi
+    pose proof (ecinvalid Crp.grp ebs en v w b zkppermuv zkppermvw zkpdecw cpi
                           zkpcpi  ets' em etinbs He H18 H10 Ht1 Ht2 Ht3).
     exists ets', (en :: etinbs), tpbs', (tp :: etpbs), em.
     repeat split. assumption. rewrite <- H5. assumption.
@@ -1195,7 +1196,7 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
     destruct (ballot_valid_dec u). destruct H as [e H].
     pose proof (g e). omega. auto.
     
-    destruct (M.ballot_valid_dec a).
+    destruct (ballot_valid_dec a).
     pose proof (IHbs u H). rewrite H0. auto.
     pose proof (IHbs u H). auto.
   Qed.
@@ -1219,7 +1220,7 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
     destruct H as [cs' [H1 H2]].
     exists (cs' ++ [u]). split. rewrite app_assoc_reverse. auto.
     rewrite (valid_compute_margin_distributes _ _ g). rewrite <- H2. 
-    unfold M.update_marg. apply functional_extensionality; intros.
+    unfold update_marg. apply functional_extensionality; intros.
     apply functional_extensionality; intros. 
     destruct (a x x0) as [H3 [H4 H5]].
     destruct (lt_eq_lt_dec (u x) (u x0)) as [[H6 | H6] | H6].
@@ -1260,7 +1261,7 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
                                                                             
   (* Uniqueness of winners *)
   Lemma uniqueness_proof : forall bs w w',
-      Count bs (winners w) -> M.Count bs (winners w') -> w = w'.
+      Count bs (winners w) -> Count bs (winners w') -> w = w'.
   Proof.
     intros bs w w' H1 H2.     
     inversion H1. inversion H2.
@@ -1275,22 +1276,22 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
     specialize ((proj1 H0) eq_refl); intros.
     destruct H. destruct H4.
     destruct H3. destruct H5.
-    pose proof (M.loses_type_prop m0 x x0).
-    pose proof (M.loses_prop_iterated_marg m0 x H9).
+    pose proof (loses_type_prop m0 x x0).
+    pose proof (loses_prop_iterated_marg m0 x H9).
     destruct H10 as [dd H10].
-    pose proof (M.wins_type_prop m0 x x1).
-    pose proof (M.wins_prop_iterated_marg m0 x H11).
+    pose proof (wins_type_prop m0 x x1).
+    pose proof (wins_prop_iterated_marg m0 x H11).
     pose proof (H12 dd). omega.
     
     specialize ((proj1 H3) eq_refl); intros.
     specialize ((proj1 H5) eq_refl); intros.
     destruct H. destruct H4.
     destruct H3. destruct H5.
-    pose proof (M.loses_type_prop m0 x x0).
-    pose proof (M.loses_prop_iterated_marg m0 x H9).
+    pose proof (loses_type_prop m0 x x0).
+    pose proof (loses_prop_iterated_marg m0 x H9).
     destruct H10 as [dd H10].
-    pose proof (M.wins_type_prop m0 x x1).
-    pose proof (M.wins_prop_iterated_marg m0 x H11).
+    pose proof (wins_type_prop m0 x x1).
+    pose proof (wins_prop_iterated_marg m0 x H11).
     pose proof (H12 dd). omega.
   Qed.
     
@@ -1301,9 +1302,9 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
   Lemma plaintext_schulze_to_homomorphic:
     forall (bs : list ballot) (pbs : list pballot) (ebs : list eballot)
       (w : cand -> bool)
-      (H : pbs = map (fun x => (fun c d => decrypt_message Crp.D.grp privatekey (x c d))) ebs)
+      (H : pbs = map (fun x => (fun c d => decrypt_message Crp.grp privatekey (x c d))) ebs)
       (H2 : mapping_ballot_pballot bs pbs), (* valid b <-> valid pb *)
-      M.Count bs (winners w) -> ECount Crp.D.grp ebs (ewinners w).
+      Count bs (winners w) -> ECount Crp.grp ebs (ewinners w).
   Proof.
     (* Show that margin computed from bs is same as ebs *)
     intros bs pbs ebs w H0 H1 H2.
@@ -1316,23 +1317,23 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
     assert (ets = []). destruct ets. auto.
     rewrite H in Htpb. inversion Htpb. rewrite H3 in He. 
     
-    pose proof (ecdecrypt Crp.D.grp ebs etinbs
+    pose proof (ecdecrypt Crp.grp ebs etinbs
                           em
                           fm
                           (fun c d => construct_zero_knowledge_decryption_proof
-                                     Crp.D.grp privatekey (em c d)) He).
+                                     Crp.grp privatekey (em c d)) He).
     simpl in X. 
     assert (forall c d : cand,
                verify_zero_knowledge_decryption_proof
-                 Crp.D.grp (fm c d) (em c d)
-                 (construct_zero_knowledge_decryption_proof Crp.D.grp privatekey (em c d)) = true).
+                 Crp.grp (fm c d) (em c d)
+                 (construct_zero_knowledge_decryption_proof Crp.grp privatekey (em c d)) = true).
     intros. apply Pr.verify_honest_decryption_zkp. rewrite Hfm. auto.
     specialize (X H4). clear H4.
     
     pose proof (fin bs fm inb (c_wins fm) (wins_loses_type_dec fm) Hm
                     (c_wins_true_type fm) (c_wins_false_type fm)).
-    pose proof (ecfin Crp.D.grp ebs fm (c_wins fm) (wins_loses_type_dec fm)
-                      X (c_wins_true_type fm) (c_wins_false_type fm)).
+    pose proof (ecfin Crp.grp ebs fm (c_wins fm) (M.wins_loses_type_dec fm)
+                      X (M.c_wins_true_type fm) (M.c_wins_false_type fm)).
     
     (* All I need now is assert c_wins fm = w *)
     pose proof (uniqueness_proof bs w (c_wins fm) H2 X0).
@@ -1345,14 +1346,14 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
        v, and w *)
   Theorem existence_of_perm :
     forall cpi zkpcpi,
-      verify_permutation_commitment Crp.D.grp (Datatypes.length cand_all) cpi zkpcpi = true ->
+      verify_permutation_commitment Crp.grp (Datatypes.length cand_all) cpi zkpcpi = true ->
       existsT (pi : Permutation),  forall u v w zkppermuv zkppermvw, 
-    (forall c, verify_row_permutation_ballot Crp.D.grp u v cpi zkppermuv c = true) ->
-    (forall c, verify_col_permutation_ballot Crp.D.grp v w cpi zkppermvw c = true) ->
-    forall c d, (decrypt_message Crp.D.grp privatekey (v c d) =
-            decrypt_message Crp.D.grp privatekey (u c (projT1 pi d))) /\
-           (decrypt_message Crp.D.grp privatekey (w c d) =
-            decrypt_message Crp.D.grp privatekey (v (projT1 pi c) d)).
+    (forall c, verify_row_permutation_ballot Crp.grp u v cpi zkppermuv c = true) ->
+    (forall c, verify_col_permutation_ballot Crp.grp v w cpi zkppermvw c = true) ->
+    forall c d, (decrypt_message Crp.grp privatekey (v c d) =
+            decrypt_message Crp.grp privatekey (u c (projT1 pi d))) /\
+           (decrypt_message Crp.grp privatekey (w c d) =
+            decrypt_message Crp.grp privatekey (v (projT1 pi c) d)).
   Proof.
     intros. pose proof (Pr.perm_axiom cpi zkpcpi H).  
     destruct X as [pi X]. 
@@ -1369,21 +1370,21 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
   (* Correctness in reverse direction. From encrypted ballots to plaintext *)
   Lemma margin_same_from_both_existential_rev 
         (bs : list ballot) (ebs : list eballot) (pbs : list pballot)
-        (Ht : pbs = map (fun x => (fun c d => decrypt_message Crp.D.grp privatekey (x c d))) ebs)
+        (Ht : pbs = map (fun x => (fun c d => decrypt_message Crp.grp privatekey (x c d))) ebs)
         (H1 : mapping_ballot_pballot bs pbs) :
     forall (s : EState),
-      ECount Crp.D.grp ebs s ->
+      ECount Crp.grp ebs s ->
       forall (ets etinbs : list eballot)
         (tpbs etpbs : list pballot)
         (em : cand -> cand -> ciphertext)
-        (H2 : tpbs = map (fun x => (fun c d => decrypt_message Crp.D.grp privatekey (x c d))) ets)
-        (H3 : etpbs = map (fun x => (fun c d => decrypt_message Crp.D.grp privatekey (x c d))) etinbs),
+        (H2 : tpbs = map (fun x => (fun c d => decrypt_message Crp.grp privatekey (x c d))) ets)
+        (H3 : etpbs = map (fun x => (fun c d => decrypt_message Crp.grp privatekey (x c d))) etinbs),
         s = epartial (ets, etinbs) em ->
         existsT
           (ts tinbs : list ballot)
           (m : cand -> cand -> Z), 
     (Count bs (partial (ts, tinbs) m) *
-     (m = fun c d => decrypt_message Crp.D.grp privatekey (em c d)) *
+     (m = fun c d => decrypt_message Crp.grp privatekey (em c d)) *
      mapping_ballot_pballot ts tpbs *
      mapping_ballot_pballot tinbs etpbs)%type.
   Proof.
@@ -1409,7 +1410,7 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
          I am going to add u in encrypted margin *)
     inversion H0.
     specialize (IHECount (u :: us) inbs). simpl in IHECount.
-    specialize (IHECount ((fun c d : cand => decrypt_message Crp.D.grp privatekey (u c d)) :: tpbs)
+    specialize (IHECount ((fun c d : cand => decrypt_message Crp.grp privatekey (u c d)) :: tpbs)
                          etpbs m).
     rewrite H2 in IHECount. rewrite H5 in IHECount.
     specialize (IHECount eq_refl).
@@ -1428,30 +1429,30 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
          I know b is valid so this translates back to validity of u. 
          Since u is valid then b0 is valid *)
     assert (matrix_ballot_valid
-              (fun c d : cand => decrypt_message Crp.D.grp privatekey (u c d))).
+              (fun c d : cand => decrypt_message Crp.grp privatekey (u c d))).
     pose proof (existence_of_perm cpi zkpcpi e). 
     destruct X as [[pi Hsig] Hf].
     specialize (Hf u v w zkppermuv zkppermvw e0 e1).
     destruct m0 as [Min [fn Mas]].
 
-    assert (forall c d, decrypt_message Crp.D.grp privatekey (v c d) =
-                   decrypt_message Crp.D.grp privatekey (u c (pi d))). 
+    assert (forall c d, decrypt_message Crp.grp privatekey (v c d) =
+                   decrypt_message Crp.grp privatekey (u c (pi d))). 
      intros. pose proof (Hf c d).
      simpl in H9. destruct H9. assumption.
 
-     assert (forall c d, decrypt_message Crp.D.grp privatekey (w c d) =
-                    decrypt_message Crp.D.grp privatekey (v (pi c) d)). 
+     assert (forall c d, decrypt_message Crp.grp privatekey (w c d) =
+                    decrypt_message Crp.grp privatekey (v (pi c) d)). 
      intros. pose proof (Hf c d). destruct H10. assumption.
 
-     assert (forall c d, decrypt_message Crp.D.grp privatekey (w c d) =
-                    decrypt_message Crp.D.grp privatekey (u (pi c) (pi d))).
+     assert (forall c d, decrypt_message Crp.grp privatekey (w c d) =
+                    decrypt_message Crp.grp privatekey (u (pi c) (pi d))).
      intros. rewrite H10. rewrite H9. auto.
 
-     assert (forall c d, b c d = decrypt_message Crp.D.grp privatekey (w c d)).
+     assert (forall c d, b c d = decrypt_message Crp.grp privatekey (w c d)).
      intros. pose proof (Pr.decryption_from_zkp_proof (w c d) (b c d) (zkpdecw c d) (e2 c d));
                assumption.
 
-     assert (forall c d, b c d = decrypt_message Crp.D.grp privatekey (u (pi c) (pi d))).
+     assert (forall c d, b c d = decrypt_message Crp.grp privatekey (u (pi c) (pi d))).
      intros.  rewrite H12. auto.
  
      split. intros. unfold Bijective in Hsig.
@@ -1469,25 +1470,25 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
      
      pose proof (proj2 (connect_validity_of_ballot_pballot
                           b0
-                          (fun c d : cand => decrypt_message Crp.D.grp privatekey (u c d)) H4)).
+                          (fun c d : cand => decrypt_message Crp.grp privatekey (u c d)) H4)).
      assert ( forall c : cand, (b0 c > 0)%nat).
      destruct ((matrix_ballot_valid_dec (fun c d : cand =>
-                                           decrypt_message Crp.D.grp privatekey (u c d)))).
+                                           decrypt_message Crp.grp privatekey (u c d)))).
      simpl in H10. specialize (H10 eq_refl).
-      destruct (M.ballot_valid_dec b0). auto. inversion H10. congruence.
+      destruct (ballot_valid_dec b0). auto. inversion H10. congruence.
       (* Add this ballot in count *)
-      pose proof (M.cvalid bs b0 ts decm
-                         (fun c d : cand => decrypt_message Crp.D.grp privatekey (nm c d))
+      pose proof (cvalid bs b0 ts decm
+                         (fun c d : cand => decrypt_message Crp.grp privatekey (nm c d))
                          tinbs IHc H11).
       unfold map_ballot_pballot in H4.      
       assert (
           forall c d : cand,
             ((b0 c < b0 d)%nat ->
-             (fun c0 d0 : cand => decrypt_message Crp.D.grp privatekey (nm c0 d0)) c d = decm c d + 1) /\
-            (b0 c = b0 d -> (fun c0 d0 : cand => decrypt_message Crp.D.grp privatekey (nm c0 d0)) c d
+             (fun c0 d0 : cand => decrypt_message Crp.grp privatekey (nm c0 d0)) c d = decm c d + 1) /\
+            (b0 c = b0 d -> (fun c0 d0 : cand => decrypt_message Crp.grp privatekey (nm c0 d0)) c d
                            = decm c d) /\
             ((b0 c > b0 d)%nat ->
-             (fun c0 d0 : cand => decrypt_message Crp.D.grp privatekey (nm c0 d0)) c d = decm c d - 1)).
+             (fun c0 d0 : cand => decrypt_message Crp.grp privatekey (nm c0 d0)) c d = decm c d - 1)).
       destruct H4.  destruct H4.  congruence.
       destruct H4. destruct H12.  
       intros.
@@ -1504,7 +1505,7 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
       apply H16 in H14.  rewrite e3. rewrite Pr.homomorphic_addition_axiom.
       rewrite H14.  rewrite Hdec. rewrite Z.add_comm. auto.
       specialize (X H12).
-      exists ts, tinbs, (fun c d : cand => decrypt_message Crp.D.grp privatekey (nm c d)).
+      exists ts, tinbs, (fun c d : cand => decrypt_message Crp.grp privatekey (nm c d)).
       split. split. split. auto. rewrite H7. auto.  rewrite <- H2 in H8. auto.
       auto.
       (* Finished cvalid case *)
@@ -1517,7 +1518,7 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
       inversion H6. 
       specialize (IHECount (u :: us) etinbs).
       simpl in IHECount.
-      specialize (IHECount ((fun c d : cand => decrypt_message Crp.D.grp privatekey (u c d)) :: tpbs)).
+      specialize (IHECount ((fun c d : cand => decrypt_message Crp.grp privatekey (u c d)) :: tpbs)).
       simpl in H3. destruct etpbs. inversion H3.
       inversion H3.
       specialize (IHECount etpbs m). rewrite <- H5 in H2.
@@ -1536,7 +1537,7 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
        I know b is invalid so this translates back to invalidity of u. 
          Since u is invalid then b0 is invalid *)
       assert (~matrix_ballot_valid
-               (fun c d : cand => decrypt_message Crp.D.grp privatekey (u c d))).
+               (fun c d : cand => decrypt_message Crp.grp privatekey (u c d))).
       intro. apply n.
       
       unfold matrix_ballot_valid in *.  destruct H14 as [H14 [g Hg]].
@@ -1545,24 +1546,24 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
       destruct X as [[pi Hsig] Hf].
       specialize (Hf u v w zkppermuv zkppermvw e0 e1).
       
-      assert (forall c d, decrypt_message Crp.D.grp privatekey (v c d) =
-                     decrypt_message Crp.D.grp privatekey (u c (pi d))). 
+      assert (forall c d, decrypt_message Crp.grp privatekey (v c d) =
+                     decrypt_message Crp.grp privatekey (u c (pi d))). 
       intros. pose proof (Hf c d).
       simpl in H15. destruct H15. assumption.
       
-      assert (forall c d, decrypt_message Crp.D.grp privatekey (w c d) =
-                     decrypt_message Crp.D.grp privatekey (v (pi c) d)). 
+      assert (forall c d, decrypt_message Crp.grp privatekey (w c d) =
+                     decrypt_message Crp.grp privatekey (v (pi c) d)). 
       intros. pose proof (Hf c d). simpl in H16. destruct H16. assumption.
       
-      assert (forall c d, decrypt_message Crp.D.grp privatekey (w c d) =
-                     decrypt_message Crp.D.grp privatekey (u (pi c) (pi d))).
+      assert (forall c d, decrypt_message Crp.grp privatekey (w c d) =
+                     decrypt_message Crp.grp privatekey (u (pi c) (pi d))).
       intros. rewrite H16. rewrite H15. auto.
       
-      assert (forall c d, b c d = decrypt_message Crp.D.grp privatekey (w c d)).
+      assert (forall c d, b c d = decrypt_message Crp.grp privatekey (w c d)).
       intros. pose proof (Pr.decryption_from_zkp_proof (w c d) (b c d) (zkpdecw c d) (e2 c d));
                 assumption.
       
-      assert (forall c d, b c d = decrypt_message Crp.D.grp privatekey (u (pi c) (pi d))).
+      assert (forall c d, b c d = decrypt_message Crp.grp privatekey (u (pi c) (pi d))).
       intros.  rewrite H18. auto.
       
       
@@ -1576,13 +1577,13 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
       
       pose proof (proj2 (connect_invalidity_of_ballot_pballot
                            b0
-                           (fun c d : cand => decrypt_message Crp.D.grp privatekey (u c d)) H8)).
+                           (fun c d : cand => decrypt_message Crp.grp privatekey (u c d)) H8)).
       assert (exists c, (b0 c = 0)%nat). 
       destruct (matrix_ballot_valid_dec
-                  (fun c d : cand => decrypt_message Crp.D.grp privatekey (u c d))).
+                  (fun c d : cand => decrypt_message Crp.grp privatekey (u c d))).
       congruence. simpl in H15. specialize (H15 eq_refl).
-      destruct (M.ballot_valid_dec b0). inversion H15.  auto.
-      pose proof (M.cinvalid bs b0 ts decm tinbs IHc H16).
+      destruct (ballot_valid_dec b0). inversion H15.  auto.
+      pose proof (cinvalid bs b0 ts decm tinbs IHc H16).
       exists ts, (b0 :: tinbs), decm.
       split. split. split. auto.
       rewrite H7 in Hdec. auto.
@@ -1601,10 +1602,10 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
   (* This function computes the encrypted margin *)
   Fixpoint compute_margin_enc (bs : list eballot) :=
     match bs with
-    | [] => fun c d => encrypt_message Crp.D.grp 0
+    | [] => fun c d => encrypt_message Crp.grp 0
     | h :: t =>
-      match matrix_ballot_valid_dec (fun c d => decrypt_message Crp.D.grp privatekey (h c d)) with
-      | left _ => fun c d => homomorphic_addition Crp.D.grp (h c d) (compute_margin_enc t c d)
+      match matrix_ballot_valid_dec (fun c d => decrypt_message Crp.grp privatekey (h c d)) with
+      | left _ => fun c d => homomorphic_addition Crp.grp (h c d) (compute_margin_enc t c d)
       | right _ => compute_margin_enc t
       end
     end.
@@ -1614,20 +1615,20 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
       
     Lemma valid_compute_margin_distributes_enc :
       forall bs (u : eballot),
-        matrix_ballot_valid (fun c d : cand => decrypt_message Crp.D.grp privatekey (u c d)) ->
-        forall c d, decrypt_message Crp.D.grp privatekey
+        matrix_ballot_valid (fun c d : cand => decrypt_message Crp.grp privatekey (u c d)) ->
+        forall c d, decrypt_message Crp.grp privatekey
                                (compute_margin_enc (bs ++ [u]) c d) =
-               decrypt_message Crp.D.grp privatekey
-                               (homomorphic_addition Crp.D.grp (u c d) (compute_margin_enc bs c d)).
+               decrypt_message Crp.grp privatekey
+                               (homomorphic_addition Crp.grp (u c d) (compute_margin_enc bs c d)).
     Proof. 
       induction bs.
       + simpl; intros. 
         destruct (matrix_ballot_valid_dec (fun c d : cand =>
-                                             decrypt_message Crp.D.grp privatekey (u c d)));
+                                             decrypt_message Crp.grp privatekey (u c d)));
           try congruence.
       + intros. simpl.
         destruct (matrix_ballot_valid_dec (fun c d : cand =>
-                                             decrypt_message Crp.D.grp privatekey (a c d))).
+                                             decrypt_message Crp.grp privatekey (a c d))).
         pose proof (IHbs _ H).
         repeat rewrite Pr.homomorphic_addition_axiom.  rewrite H0.
         rewrite Pr.homomorphic_addition_axiom. lia. auto. 
@@ -1638,10 +1639,10 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
 
     Lemma invalid_compute_margin_same_enc :
       forall bs (u : eballot),
-        ~matrix_ballot_valid (fun c d : cand => decrypt_message Crp.D.grp privatekey (u c d)) ->
-        forall c d, decrypt_message Crp.D.grp privatekey 
+        ~matrix_ballot_valid (fun c d : cand => decrypt_message Crp.grp privatekey (u c d)) ->
+        forall c d, decrypt_message Crp.grp privatekey 
                                (compute_margin_enc (bs ++ [u]) c d) = 
-               decrypt_message Crp.D.grp privatekey (compute_margin_enc bs c d).
+               decrypt_message Crp.grp privatekey (compute_margin_enc bs c d).
     Proof.
       induction bs; simpl; intros; try auto.
       destruct (matrix_ballot_valid_dec _).
@@ -1657,12 +1658,12 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
       
       
     Lemma tail_count_enc : forall bs s,
-        ECount Crp.D.grp bs s ->
+        ECount Crp.grp bs s ->
         forall us inbs m,
           s = epartial (us, inbs) m ->
           exists cs', bs = cs' ++ us /\
-                 (forall c d, decrypt_message Crp.D.grp privatekey (m c d) =
-                         decrypt_message Crp.D.grp privatekey (compute_margin_enc cs' c d)).
+                 (forall c d, decrypt_message Crp.grp privatekey (m c d) =
+                         decrypt_message Crp.grp privatekey (compute_margin_enc cs' c d)).
     Proof.
       intros bs s Hc.
       induction Hc; simpl; intros; inversion H; subst; clear H.
@@ -1680,30 +1681,30 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
       intros. 
       (*  m0 : matrix_ballot_valid b it means matrix_ballot_valid u 
           so add it to the counting *)
-      assert (matrix_ballot_valid (fun c d : cand => decrypt_message Crp.D.grp privatekey (u c d))). 
+      assert (matrix_ballot_valid (fun c d : cand => decrypt_message Crp.grp privatekey (u c d))). 
       pose proof (existence_of_perm cpi zkpcpi e). 
       destruct X as [[pi Hsig] Hf].
       specialize (Hf u v w zkppermuv zkppermvw e0 e1).
       destruct m0 as [Min [fn Mas]].
 
-      assert (forall c d, decrypt_message Crp.D.grp privatekey (v c d) =
-                     decrypt_message Crp.D.grp privatekey (u c (pi d))). 
+      assert (forall c d, decrypt_message Crp.grp privatekey (v c d) =
+                     decrypt_message Crp.grp privatekey (u c (pi d))). 
       intros. pose proof (Hf c0 d0). destruct H.
       simpl in H.  assumption.
       
-      assert (forall c d, decrypt_message Crp.D.grp privatekey (w c d) =
-                     decrypt_message Crp.D.grp privatekey (v (pi c) d)). 
+      assert (forall c d, decrypt_message Crp.grp privatekey (w c d) =
+                     decrypt_message Crp.grp privatekey (v (pi c) d)). 
       intros. pose proof (Hf c0 d0). destruct H0. assumption.
       
-      assert (forall c d, decrypt_message Crp.D.grp privatekey (w c d) =
-                     decrypt_message Crp.D.grp privatekey (u (pi c) (pi d))).
+      assert (forall c d, decrypt_message Crp.grp privatekey (w c d) =
+                     decrypt_message Crp.grp privatekey (u (pi c) (pi d))).
       intros. rewrite H0. rewrite H. auto.
       
-      assert (forall c d, b c d = decrypt_message Crp.D.grp privatekey (w c d)).
+      assert (forall c d, b c d = decrypt_message Crp.grp privatekey (w c d)).
       intros. pose proof (Pr.decryption_from_zkp_proof (w c0 d0) (b c0 d0)
                                                     (zkpdecw c0 d0) (e2 c0 d0)); assumption.
 
-      assert (forall c d, b c d = decrypt_message Crp.D.grp privatekey (u (pi c) (pi d))).
+      assert (forall c d, b c d = decrypt_message Crp.grp privatekey (u (pi c) (pi d))).
       intros. rewrite <- H3. auto.
 
       split. intros. unfold Bijective in Hsig.
@@ -1726,7 +1727,7 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
       (* Hypothesis n states that b is not valid so it translates 
          back to decryption of u *)
       assert (Hm :
-                ~matrix_ballot_valid (fun c d : cand => decrypt_message Crp.D.grp privatekey (u c d))).
+                ~matrix_ballot_valid (fun c d : cand => decrypt_message Crp.grp privatekey (u c d))).
 
 
       intro. apply n.
@@ -1737,24 +1738,24 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
       destruct X as [[pi Hsig] Hf].
       specialize (Hf u v w zkppermuv zkppermvw e0 e1).
 
-      assert (forall c d, decrypt_message Crp.D.grp privatekey (v c d) =
-                     decrypt_message Crp.D.grp privatekey (u c (pi d))). 
+      assert (forall c d, decrypt_message Crp.grp privatekey (v c d) =
+                     decrypt_message Crp.grp privatekey (u c (pi d))). 
       intros. pose proof (Hf c d).
       simpl in H0. destruct H0. assumption.
 
-      assert (forall c d, decrypt_message Crp.D.grp privatekey (w c d) =
-                     decrypt_message Crp.D.grp privatekey (v (pi c) d)). 
+      assert (forall c d, decrypt_message Crp.grp privatekey (w c d) =
+                     decrypt_message Crp.grp privatekey (v (pi c) d)). 
       intros. pose proof (Hf c d). simpl in H1. destruct H1. assumption.
 
-      assert (forall c d, decrypt_message Crp.D.grp privatekey (w c d) =
-                     decrypt_message Crp.D.grp privatekey (u (pi c) (pi d))).
+      assert (forall c d, decrypt_message Crp.grp privatekey (w c d) =
+                     decrypt_message Crp.grp privatekey (u (pi c) (pi d))).
       intros. rewrite H1. rewrite H0. auto.
 
-      assert (forall c d, b c d = decrypt_message Crp.D.grp privatekey (w c d)).
+      assert (forall c d, b c d = decrypt_message Crp.grp privatekey (w c d)).
       intros. pose proof (Pr.decryption_from_zkp_proof (w c d) (b c d) (zkpdecw c d) (e2 c d));
                 assumption.
 
-      assert (forall c d, b c d = decrypt_message Crp.D.grp privatekey (u (pi c) (pi d))).
+      assert (forall c d, b c d = decrypt_message Crp.grp privatekey (u (pi c) (pi d))).
       intros. rewrite H3. auto.
 
       split. intros. unfold Bijective in Hsig.
@@ -1776,11 +1777,11 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
     
 
     Lemma same_margin_enc :
-      forall bs inbs inbs0 encm encm0 s s0 (c0 : ECount Crp.D.grp bs s) (c1 :  ECount Crp.D.grp bs s0),  
+      forall bs inbs inbs0 encm encm0 s s0 (c0 : ECount Crp.grp bs s) (c1 :  ECount Crp.grp bs s0),  
         s = epartial ([], inbs) encm ->
         s0 = epartial ([], inbs0) encm0 ->
-        forall c d, decrypt_message Crp.D.grp privatekey (encm c d) =
-               decrypt_message Crp.D.grp privatekey (encm0 c d). 
+        forall c d, decrypt_message Crp.grp privatekey (encm c d) =
+               decrypt_message Crp.grp privatekey (encm0 c d). 
     Proof.
       intros.
       pose proof (tail_count_enc bs s c0 [] inbs encm H).
@@ -1794,7 +1795,7 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
       
     
     Lemma unique_dec_margin : forall bs dm dm0,
-      ECount Crp.D.grp bs (edecrypt dm) ->  ECount Crp.D.grp bs (edecrypt dm0) ->
+      ECount Crp.grp bs (edecrypt dm) ->  ECount Crp.grp bs (edecrypt dm0) ->
       dm = dm0.
     Proof.
       intros. inversion X. inversion X0. subst.
@@ -1817,7 +1818,7 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
       
     
     Lemma uniqueness_proof_enc : forall bs w w',
-        ECount Crp.D.grp bs (ewinners w) -> ECount Crp.D.grp bs (ewinners w') -> w = w'.
+        ECount Crp.grp bs (ewinners w) -> ECount Crp.grp bs (ewinners w') -> w = w'.
     Proof. 
       intros bs w w' H1 H2.
       inversion H1. inversion  H2. 
@@ -1854,11 +1855,11 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
       
  
     Lemma homomorphic_schulze_to_plaintext:
-      forall  (bs : list M.ballot) (pbs : list pballot) (ebs : list eballot)
+      forall  (bs : list ballot) (pbs : list pballot) (ebs : list eballot)
          (w : cand -> bool)
-         (H : pbs = map (fun x => (fun c d => decrypt_message Crp.D.grp privatekey (x c d))) ebs)
+         (H : pbs = map (fun x => (fun c d => decrypt_message Crp.grp privatekey (x c d))) ebs)
          (H2 : mapping_ballot_pballot bs pbs), (* valid b <-> valid pb *)
-        ECount Crp.D.grp ebs (ewinners w) -> M.Count bs (M.winners w).
+        ECount Crp.grp ebs (ewinners w) -> Count bs (winners w).
     Proof.
       intros bs pbs ebs w H0 H1 H2.
       destruct (pall_ballots_counted ebs) as [inb [fm Hm]]. 
@@ -1866,24 +1867,24 @@ Module Encproof (Import C : Cand) (Import K : Keys) (Import Crp : CryptoAxioms.C
                      bs ebs pbs H0 H1 _ Hm [] inb []
                     (map
                        (fun (x : cand -> cand -> ciphertext)
-                          (c d : cand) => decrypt_message Crp.D.grp privatekey (x c d)) inb)
+                          (c d : cand) => decrypt_message Crp.grp privatekey (x c d)) inb)
                  fm eq_refl eq_refl eq_refl).
       destruct X as [ts [tinbs [m [[[IHc Hmm] IHm] Hw]]]].    
       assert (ts = []). destruct ts. reflexivity. inversion IHm.
       rewrite H in IHc, IHm.
-      pose proof (ecdecrypt Crp.D.grp ebs inb fm m
+      pose proof (ecdecrypt Crp.grp ebs inb fm m
                  (fun c d => construct_zero_knowledge_decryption_proof
-                            Crp.D.grp privatekey (fm c d)) Hm).
+                            Crp.grp privatekey (fm c d)) Hm).
       simpl in X.
       assert (forall c d : cand,
                  verify_zero_knowledge_decryption_proof
-                   Crp.D.grp (m c d) (fm c d)
-                   (construct_zero_knowledge_decryption_proof Crp.D.grp privatekey (fm c d)) = true).
+                   Crp.grp (m c d) (fm c d)
+                   (construct_zero_knowledge_decryption_proof Crp.grp privatekey (fm c d)) = true).
       intros. apply Pr.verify_honest_decryption_zkp. rewrite Hmm. auto.
       specialize (X H3). clear H3. 
-      pose proof (M.fin bs m tinbs (M.c_wins m) (M.wins_loses_type_dec m) IHc
-                      (M.c_wins_true_type m) (M.c_wins_false_type m)).
-      pose proof (ecfin Crp.D.grp ebs m (M.c_wins m) (M.wins_loses_type_dec m)
+      pose proof (fin bs m tinbs (c_wins m) (wins_loses_type_dec m) IHc
+                      (c_wins_true_type m) (c_wins_false_type m)).
+      pose proof (ecfin Crp.grp ebs m (M.c_wins m) (M.wins_loses_type_dec m)
                         X (M.c_wins_true_type m) (M.c_wins_false_type m)).
       (* I need uniqueness proof stating that 
          ECount grp ebs (ewinners w) ->  ECount grp ebs (ewinners (c_wins m)) -> 

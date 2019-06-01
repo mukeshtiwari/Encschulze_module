@@ -7,7 +7,7 @@ Module Type Keys.
   Parameter Generator : Type. (* Group generator *)
   Parameter Pubkey : Type. (* Public key *)
   Parameter Prikey : Type. (* Private key *)
-  Parameter DecZkp : Type. (* Honest Decryption Zero knowledge Proof *)  
+ 
     
   (* Group infrastrucutre. large prime, generator, private and public key *)
   Parameter prime : Prime.

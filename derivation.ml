@@ -1,5 +1,4 @@
 open Big
-open Lib
 (*
 let show_bool = function 
   | Lib.True -> "True"

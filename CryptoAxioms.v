@@ -13,36 +13,15 @@ Notation "'existsT' x .. y , p" :=
     (at level 200, x binder, right associativity,
      format "'[' 'existsT' '/ ' x .. y , '/ ' p ']'") : type_scope.
 
-(* Module for internal definitions of Crypto Module Type. 
-   The reason for moving abstract types here I don't need to instantiate them 
-   and I will pass the OCaml function which will infer these types *)
-Module Def (Import C : Cand) (Import K : Keys).
-  
-  (* Plain text is integer. *)
-  Definition plaintext := Z.
-  
+(* https://stackoverflow.com/questions/8869678/polymorphic-type-inside-a-module-ocaml *)
+(* The reason for moving these abstract types is precisly the reason explaned in above link *)
+Module Type Abstype.
+
   (* Ciphertext is abstract type *)
-  Parameter ciphertext : Type. 
-  
-  (* ballot is plain text value *)
-  Definition pballot := cand -> cand -> plaintext.
-  
-  (* eballot is encrypted value *)
-  Definition eballot := cand -> cand -> ciphertext.
- 
-  (* Inductive type to construct Group from a given large prime, 
-     group generator, and publick key *)
-  Inductive Group : Type :=
-    group : Prime -> Generator -> Pubkey -> Group.
-
-  (* Construct a instance of group *)
-  Let grp := group prime gen publickey.
-
-  (* permutation is Bijective function *)
-  Definition Permutation := existsT (pi : cand -> cand), (Bijective pi).
+  Parameter ciphertext : Type.
 
   (* Pedersan's commitment for a given permutation *) 
-  Parameter Commitment : Type. 
+  Parameter Commitment : Type.
 
   (* Permutation Zero Knowledge Proof. *)
   Parameter PermZkp : Type.
@@ -55,17 +34,32 @@ Module Def (Import C : Cand) (Import K : Keys).
 
   (* Zero knowledge proof of Shuffle *)
   Parameter ShuffleZkp : Type. 
-  
-End Def. 
 
-  
-(* This module type is interface for all computing functions. The axioms about 
+  (* Honest Decryption Zero knowledge Proof *)
+  Parameter DecZkp : Type.
+
+End Abstype.
+
+(* This module type is interface for all the data, and functions. The axioms about 
    these functions are assumed in CAxioms module *)
-Module Type Crypto (Import C : Cand) (Import K : Keys).
+Module Type Crypto (Import C : Cand) (Import K : Keys) (Import Abst : Abstype).
 
-  (* Import definitions from Def module *)
-  Module D := Def C K.
-  Import D.
+  (* Plain text is integer. *)
+  Definition plaintext := Z.
+
+  
+  (* ballot is plain text value *)
+  Definition pballot := cand -> cand -> plaintext.
+  
+  (* eballot is encrypted value *)
+  Definition eballot := cand -> cand -> ciphertext.
+
+ 
+  Definition Group := (Prime * Generator * Pubkey)%type.
+
+  (* Construct a instance of group *)
+  Let grp := (prime, gen, publickey).
+  
   
   (* This function encrypts the message. It will be instantiated 
      by Crypto library function. In our case, Unicrypt library functions *)
@@ -75,18 +69,20 @@ Module Type Crypto (Import C : Cand) (Import K : Keys).
   (* This function decrypts the message *)
   Parameter decrypt_message :
     Group -> Prikey -> ciphertext -> plaintext.
-  
+
   (* This function returns zero knowledge proof of encrypted message (c1, c2) *)
   Parameter construct_zero_knowledge_decryption_proof :
     Group -> Prikey -> ciphertext -> DecZkp.
-  
+                                                                           
   (* This function verifies the zero knowledge proof of plaintext, m, is honest decryption 
      of ciphertext *)
   Parameter verify_zero_knowledge_decryption_proof :
     Group -> plaintext -> ciphertext -> DecZkp -> bool.
   
- 
-  
+  (* permutation is Bijective function *)
+  Definition Permutation := existsT (pi : cand -> cand), (Bijective pi).
+
+   
   (* The idea is for each ballot u, we are going to count 
        we generate pi, cpi, and zkpcpi. We call row permute function 
        u and pi and it returns v. Then We call column permutation 
@@ -184,13 +180,8 @@ End Crypto.
 
 (* The reason for separating the Axioms from functions is that these axioms
    no longer need to instantiate for extraction *)
-Module CAxioms  (Import C : Cand) (Import K : Keys) (Import Crp : Crypto C K).
-
-  
-  (* Import definitions from Def module *)
-  Module D := Def C K.
-  Import D.
-  
+Module CAxioms  (Import C : Cand) (Import K : Keys) (Import Abst : Abstype)
+       (Import Crp : Crypto C K Abst).
   
   (* Relation between Public and Private key. This axiom enforces that 
        publickey and privatekey are generated in pair according to 
@@ -202,11 +193,11 @@ Module CAxioms  (Import C : Cand) (Import K : Keys) (Import Crp : Crypto C K).
   
   (* Coherence axiom about honest decryption zero knowledge proof *)
   Axiom verify_honest_decryption_zkp :
-    forall (pt : plaintext) (ct : Crp.D.ciphertext)
-      (H : pt = decrypt_message Crp.D.grp privatekey ct),
+    forall (pt : plaintext) (ct : ciphertext)
+      (H : pt = decrypt_message Crp.grp privatekey ct),
       verify_zero_knowledge_decryption_proof
-        Crp.D.grp pt ct
-        (construct_zero_knowledge_decryption_proof Crp.D.grp privatekey ct) = true.
+        Crp.grp pt ct
+        (construct_zero_knowledge_decryption_proof Crp.grp privatekey ct) = true.
 
 
   
@@ -214,47 +205,46 @@ Module CAxioms  (Import C : Cand) (Import K : Keys) (Import Crp : Crypto C K).
      related  *)
   Axiom decryption_deterministic :
     forall (pt : plaintext),
-      decrypt_message Crp.D.grp privatekey (encrypt_message Crp.D.grp pt) = pt.
+      decrypt_message Crp.grp privatekey (encrypt_message Crp.grp pt) = pt.
 
 
     
   Axiom permutation_commitment_axiom :
-    forall (pi : Permutation) (cpi : Crp.D.Commitment) (s : Crp.D.S) (zkppermcommit : Crp.D.PermZkp)
-      (H1 : cpi = generatePermutationCommitment Crp.D.grp (List.length cand_all) cand_all pi s)
+    forall (pi : Permutation) (cpi : Commitment) (s : S) (zkppermcommit : PermZkp)
+      (H1 : cpi = generatePermutationCommitment Crp.grp (List.length cand_all) cand_all pi s)
       (H2 : zkppermcommit = zkpPermutationCommitment
-                              Crp.D.grp (List.length cand_all) cand_all pi cpi s),
-      verify_permutation_commitment Crp.D.grp (List.length cand_all)
+                              Crp.grp (List.length cand_all) cand_all pi cpi s),
+      verify_permutation_commitment Crp.grp (List.length cand_all)
                                     cpi zkppermcommit = true.
 
   (* Property of Homomorphic addition *)
   Axiom homomorphic_addition_axiom :
-    forall (c d : Crp.D.ciphertext),
-      decrypt_message Crp.D.grp privatekey (homomorphic_addition Crp.D.grp c d) =
-      decrypt_message Crp.D.grp privatekey c + decrypt_message Crp.D.grp privatekey d.    
+    forall (c d : ciphertext),
+      decrypt_message Crp.grp privatekey (homomorphic_addition Crp.grp c d) =
+      decrypt_message Crp.grp privatekey c + decrypt_message Crp.grp privatekey d.    
 
 
    (* Coherence Axiom about shuffle. If every thing is 
        followed according to protocol then verify_shuffle function 
        returns true *)
   Axiom verify_shuffle_axiom :
-    forall (pi : Permutation) (cpi : Crp.D.Commitment) (s : Crp.D.S)
-      (cp shuffledcp : cand -> Crp.D.ciphertext)
-      (r : Crp.D.R) (zkprowshuffle : Crp.D.ShuffleZkp)
-      (H1 : cpi = generatePermutationCommitment Crp.D.grp (List.length cand_all) cand_all pi s)
-      (H2 : shuffledcp = shuffle Crp.D.grp (List.length cand_all) cand_all dec_cand cp pi r)
-      (H3 : zkprowshuffle = shuffle_zkp Crp.D.grp (List.length cand_all)
+    forall (pi : Permutation) (cpi : Commitment) (s : S)
+      (cp shuffledcp : cand -> ciphertext)
+      (r : R) (zkprowshuffle : ShuffleZkp)
+      (H1 : cpi = generatePermutationCommitment Crp.grp (List.length cand_all) cand_all pi s)
+      (H2 : shuffledcp = shuffle Crp.grp (List.length cand_all) cand_all dec_cand cp pi r)
+      (H3 : zkprowshuffle = shuffle_zkp Crp.grp (List.length cand_all)
                                         cand_all cp shuffledcp pi cpi s r),
-      verify_shuffle Crp.D.grp (List.length cand_all)
+      verify_shuffle Crp.grp (List.length cand_all)
                      cand_all cp shuffledcp cpi zkprowshuffle = true. 
 
-
-   
+  
   (* Coherence about shuffle introducing reencryption *)
   Axiom shuffle_perm :
     forall n f pi r g, 
-      shuffle Crp.D.grp n cand_all dec_cand (f : cand -> Crp.D.ciphertext) (pi : Permutation) r = g ->
-      forall c, decrypt_message Crp.D.grp privatekey (g c) =
-           decrypt_message Crp.D.grp privatekey (compose f (projT1 pi) c).
+      shuffle Crp.grp n cand_all dec_cand (f : cand -> ciphertext) (pi : Permutation) r = g ->
+      forall c, decrypt_message Crp.grp privatekey (g c) =
+           decrypt_message Crp.grp privatekey (compose f (projT1 pi) c).
   (* end of axioms about shuffle. *)    
   
   
@@ -263,17 +253,17 @@ Module CAxioms  (Import C : Cand) (Import K : Keys) (Import Crp : Crypto C K).
        d is honest decryption of c *)
   Axiom decryption_from_zkp_proof :
     forall c d zkp, 
-      verify_zero_knowledge_decryption_proof Crp.D.grp d c zkp = true -> 
-      d = decrypt_message Crp.D.grp privatekey c.
+      verify_zero_knowledge_decryption_proof Crp.grp d c zkp = true -> 
+      d = decrypt_message Crp.grp privatekey c.
   
   (* Coherence axiom about Permutation *)
   Axiom perm_axiom :
     forall cpi zkpcpi, 
-      verify_permutation_commitment Crp.D.grp (Datatypes.length cand_all) cpi zkpcpi = true ->
-      existsT (pi : Permutation), forall (f g : cand -> Crp.D.ciphertext) (zkppf : Crp.D.ShuffleZkp), 
-    verify_shuffle Crp.D.grp (Datatypes.length cand_all) cand_all f g cpi zkppf = true ->
-    forall c, decrypt_message Crp.D.grp privatekey (g c) =
-         decrypt_message Crp.D.grp privatekey (compose f (projT1 pi) c).
+      verify_permutation_commitment Crp.grp (Datatypes.length cand_all) cpi zkpcpi = true ->
+      existsT (pi : Permutation), forall (f g : cand -> ciphertext) (zkppf : ShuffleZkp), 
+    verify_shuffle Crp.grp (Datatypes.length cand_all) cand_all f g cpi zkppf = true ->
+    forall c, decrypt_message Crp.grp privatekey (g c) =
+         decrypt_message Crp.grp privatekey (compose f (projT1 pi) c).
 
   (* End of Axioms *)
 End CAxioms.

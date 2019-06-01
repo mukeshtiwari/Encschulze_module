@@ -1,6 +1,5 @@
 open Big
-open Lib
-open Derivation 
+open Datatypes
 
 let () = Java.init [| "-Djava.class.path=jarfiles/ocaml-java.jar:jarfiles/unicrypt-2.3.jar:jarfiles/jnagmp-2.0.0.jar:jarfiles/jna-4.5.0.jar:jarfiles/schulze.jar:." |]
 
@@ -538,14 +537,14 @@ let java_big_int_to_ocaml_big_int pt =
    Big.of_string (Big_integer.to_string pt)  
 
 
-let encrypt_message (Lib.Group (prime, generator, publickey)) pt = 
+let encrypt_message ((prime, generator), publickey) pt = 
   let jpt = ocaml_big_int_to_java_big_int pt in
   let (grp, gen, pubkey) = construct_group (prime, generator, publickey) in 
   let (c1, c2) = encrypt_message_binding grp gen pubkey jpt in 
   (java_big_int_to_ocaml_big_int c1, java_big_int_to_ocaml_big_int c2)
 
 
-let decrypt_message (Lib.Group (prime, generator, publickey)) privatekey (c1, c2) =
+let decrypt_message ((prime, generator), publickey) privatekey (c1, c2) =
   let (d1, d2) = (ocaml_big_int_to_java_big_int c1, ocaml_big_int_to_java_big_int c2) in
   let (grp, gen, pubkey) = construct_group (prime, generator, publickey) in
   let prikey = construct_private_key (prime, generator, publickey) privatekey in 
@@ -553,14 +552,14 @@ let decrypt_message (Lib.Group (prime, generator, publickey)) privatekey (c1, c2
   java_big_int_to_ocaml_big_int decmsg
   
 
-let construct_zero_knowledge_decryption_proof (Lib.Group (prime, generator, publickey)) privatekey (c1, c2) =
+let construct_zero_knowledge_decryption_proof ((prime, generator), publickey) privatekey (c1, c2) =
     let (d1, d2) =  (ocaml_big_int_to_java_big_int c1, ocaml_big_int_to_java_big_int c2) in
     let (grp, gen, pubkey) = construct_group (prime, generator, publickey) in
     let prikey = construct_private_key (prime, generator, publickey) privatekey in
     construct_encryption_zero_knowledge_proof_binding grp gen pubkey prikey (d1, d2)
 
 
-let verify_zero_knowledge_decryption_proof (Lib.Group (prime, generator, publickey)) pt (c1, c2) zkpprf = 
+let verify_zero_knowledge_decryption_proof ((prime, generator), publickey) pt (c1, c2) zkpprf = 
     let (grp, gen, pubkey) = construct_group (prime, generator, publickey) in
     let jpt = ocaml_big_int_to_java_big_int pt in
     let (d1, d2) =  (ocaml_big_int_to_java_big_int c1, ocaml_big_int_to_java_big_int c2) in
@@ -572,21 +571,21 @@ let rec nat_to_int = function
   | S n' -> 1 + nat_to_int n'
 
 
-let generatePermutation (Lib.Group (prime, generator, publickey)) n cand_list =
+let generatePermutation ((prime, generator), publickey) n cand_list =
   let (grp, gen, pubkey) = construct_group (prime, generator, publickey) in  
   let perm = generatePermutation_binding grp gen pubkey (nat_to_int n) in
   let parr = construct_array_from_permutation_element perm in
   let plist = create_list_from_array parr in
   (* print_list string_of_int plist;
   print_newline (); *)
-  Lib.ExistT (perm_function cand_list plist, __) 
+  (perm_function cand_list plist, __) 
 
-let generateS (Lib.Group (prime, generator, publickey)) n =
+let generateS ((prime, generator), publickey) n =
   let (grp, gen, pubkey) = construct_group (prime, generator, publickey) in
   generateS_binding grp gen pubkey (nat_to_int n)  
 
 
-let generatePermutationCommitment (Lib.Group (prime, generator, publickey)) n cand_list (Lib.ExistT (f, __)) rands =
+let generatePermutationCommitment ((prime, generator), publickey) n cand_list (f, __) rands =
   let (grp, gen, pubkey) = construct_group (prime, generator, publickey) in
   let plist = perm_list cand_list f in 
   let parr = construct_array_from_list plist in 
@@ -594,7 +593,7 @@ let generatePermutationCommitment (Lib.Group (prime, generator, publickey)) n ca
   generatePermutationCommitment_binding grp gen pubkey (nat_to_int n) perm rands
 
 
-let zkpPermutationCommitment (Lib.Group (prime, generator, publickey)) n cand_list (Lib.ExistT (f, __)) pcommit rands = 
+let zkpPermutationCommitment ((prime, generator), publickey) n cand_list (f, __) pcommit rands = 
   let (grp, gen, pubkey) = construct_group (prime, generator, publickey) in
   let plist = perm_list cand_list f in 
   let parr = construct_array_from_list plist in
@@ -602,11 +601,11 @@ let zkpPermutationCommitment (Lib.Group (prime, generator, publickey)) n cand_li
   zkpPermutationCommitment_binding grp gen pubkey (nat_to_int n) perm pcommit rands
 
 
-let verify_permutation_commitment (Lib.Group (prime, generator, publickey)) n perm_zkp pcommit = 
+let verify_permutation_commitment ((prime, generator), publickey) n perm_zkp pcommit = 
   let (grp, gen, pubkey) = construct_group (prime, generator, publickey) in
   zkpPermutationVerification_binding grp gen pubkey (nat_to_int n) perm_zkp pcommit
 
-let homomorphic_addition (Lib.Group (prime, generator, publickey)) (c1, c2) (d1, d2) = 
+let homomorphic_addition ((prime, generator), publickey) (c1, c2) (d1, d2) = 
   let (c1', c2') =  (ocaml_big_int_to_java_big_int c1, ocaml_big_int_to_java_big_int c2) in
   let (d1', d2') =  (ocaml_big_int_to_java_big_int d1, ocaml_big_int_to_java_big_int d2) in
   let (grp, gen, pubkey) = construct_group (prime, generator, publickey) in
@@ -615,14 +614,14 @@ let homomorphic_addition (Lib.Group (prime, generator, publickey)) (c1, c2) (d1,
 
 
 
-let generateR (Lib.Group (prime, generator, publickey)) n = 
+let generateR ((prime, generator), publickey) n = 
   let (grp, gen, pubkey) = construct_group (prime, generator, publickey) in
   generateR_binding grp gen pubkey (nat_to_int n)
 
 
 
 
-let shuffle (Lib.Group (prime, generator, publickey)) n cand_all dec_cand bf (Lib.ExistT (f, __)) rn =
+let shuffle ((prime, generator), publickey) n cand_all dec_cand bf (f, __) rn =
    let (grp, gen, pubkey) = construct_group (prime, generator, publickey) in 
    let blist = List.map (fun (c1, c2) -> (ocaml_big_int_to_java_big_int c1, ocaml_big_int_to_java_big_int c2)) (List.map bf cand_all) in 
    let jballot = construct_ballot_from_list grp blist in
@@ -634,7 +633,7 @@ let shuffle (Lib.Group (prime, generator, publickey)) n cand_all dec_cand bf (Li
    
 
 
-let shuffle_zkp (Lib.Group (prime, generator, publickey)) n cand_all ballot shuffled_ballot (Lib.ExistT (f, __)) pcommit rands rn = 
+let shuffle_zkp ((prime, generator), publickey) n cand_all ballot shuffled_ballot (f, __) pcommit rands rn = 
    let (grp, gen, pubkey) = construct_group (prime, generator, publickey) in
    let blist = List.map (fun (c1, c2) -> (ocaml_big_int_to_java_big_int c1, ocaml_big_int_to_java_big_int c2)) (List.map ballot cand_all) in
    let blist_shuffled = List.map (fun (c1, c2) -> (ocaml_big_int_to_java_big_int c1, ocaml_big_int_to_java_big_int c2)) (List.map shuffled_ballot cand_all) in
@@ -645,17 +644,20 @@ let shuffle_zkp (Lib.Group (prime, generator, publickey)) n cand_all ballot shuf
    shuffle_zkp_binding grp gen pubkey (nat_to_int n) jballot jballot_shuffled perm pcommit rands rn
 
 
-let verify_shuffle (Lib.Group (prime, generator, publickey)) n cand_all ballot shuffled_ballot pcommit shuffle_zkp = 
+let verify_shuffle ((prime, generator), publickey) n cand_all ballot shuffled_ballot pcommit shuffle_zkp = 
   let (grp, gen, pubkey) = construct_group (prime, generator, publickey) in
   shuffle_zkp_verification_binding grp gen pubkey (nat_to_int n) shuffle_zkp (Triple.get_instance pcommit ballot shuffled_ballot)
 
 
+(* Binding finished. Below code is for testing *)
+
+ 
+
+(* 
 let prime = big_int_from_string  "170141183460469231731687303715884114527"
 let generator = big_int_from_string "4"
 let publickey = big_int_from_string "49228593607874990954666071614777776087"
 let privatekey = big_int_from_string "60245260967214266009141128892124363925"
-
-
 
 
 (* It working *)
@@ -677,17 +679,17 @@ let rec int_to_nat n =
         if n <= 0 then O else S (int_to_nat (n - 1))
 
 let () = 
-  let emsg = encrypt_message (Lib.Group (prime, generator, publickey)) (Big.of_string "1") in
-  let dmsg = decrypt_message (Lib.Group (prime, generator, publickey)) privatekey emsg in 
-  let deczkp = construct_zero_knowledge_decryption_proof (Lib.Group (prime, generator, publickey)) privatekey emsg in 
-  let verify = verify_zero_knowledge_decryption_proof (Lib.Group (prime, generator, publickey)) dmsg emsg deczkp in
+  let emsg = encrypt_message ((prime, generator), publickey) (Big.of_string "1") in
+  let dmsg = decrypt_message ((prime, generator), publickey) privatekey emsg in 
+  let deczkp = construct_zero_knowledge_decryption_proof ((prime, generator), publickey) privatekey emsg in 
+  let verify = verify_zero_knowledge_decryption_proof ((prime, generator), publickey) dmsg emsg deczkp in
   print_endline (print_pair emsg);
   print_endline (Big.to_string dmsg);
   print_endline (Element.to_string deczkp);
   print_endline (string_of_bool verify);
-  let (Lib.ExistT (f, __)) = generatePermutation (Lib.Group (prime, generator, publickey)) (int_to_nat (List.length Lib.cand_all)) Lib.cand_all in
+  let (f, __) = generatePermutation ((prime, generator), publickey) (int_to_nat (List.length Lib.cand_all)) Lib.cand_all in
   let plist = List.map f Lib.cand_all in
-  print_endline ""
+  print_endline "" *)
  
 
 (*

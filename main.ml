@@ -1,9 +1,10 @@
 open Lexer
 open Parser
 open Big
-open Cryptobinding
-open Lib
-open Derivation
+open Cand
+(* open Derivation *)
+open Top
+open Specif
 
 let cc c =
   match c with
@@ -42,10 +43,9 @@ let _ =
   let e = Parser.prog Lexer.lexeme (Lexing.from_channel stdin) in
   let w = map (fun x -> map (fun (a, b, (c, d)) -> (cc a, cc b,  (Big.of_string c, Big.of_string d))) x) e in
   let v = map (fun x -> balfun x) w in
-  match eschulze_winners_pf privatekey encrypt_message decrypt_message construct_zero_knowledge_decryption_proof generatePermutation generateS 
-                            generatePermutationCommitment zkpPermutationCommitment homomorphic_addition generateR shuffle shuffle_zkp
-                           (Lib.Group (prime, generator, publickey)) v with
-  | ExistT (f, y) ->  (* List.iter (fun x -> print_endline (string_of_bool (f x))) [A; B; C] *) List.iter (fun x -> Format.printf "%s" x) (show_count y)
-  
+  match pschulze_winners v with
+  | ExistT (f, y) ->  Format.printf "%s" "it's working"
+                  
+(* List.iter (fun x -> print_endline (string_of_bool (f x))) [A; B; C] *) (*List.iter (fun x -> Format.printf "%s" x) (show_count y) *)
 (* Format.printf "%s" (show_enc_marg f)  List.iter (fun x -> Format.printf "%s" x) (show_count y) *)
 

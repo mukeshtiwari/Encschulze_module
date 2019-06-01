@@ -42,22 +42,25 @@ Module KeyInstance <: Keys.
   Parameter Prime : Type.
   Parameter prime : Prime. 
   Extract Constant Prime => "Big.big_int". 
-  Extract Constant prime => "170141183460469231731687303715884114527".
+  Extract Constant prime =>
+  "Big.of_string ""170141183460469231731687303715884114527""".
 
   Parameter Generator : Type.
   Parameter gen : Generator.
   Extract Constant Generator => "Big.big_int".
-  Extract Constant gen => "4".
+  Extract Constant gen => "Big.of_string ""4""".
 
   Parameter Pubkey : Type.
   Parameter publickey : Pubkey.
   Extract Constant Pubkey => "Big.big_int".
-  Extract Constant publickey => "49228593607874990954666071614777776087".
+  Extract Constant publickey =>
+  "Big.of_string ""49228593607874990954666071614777776087""".
 
   Parameter Prikey : Type.
   Parameter privatekey : Prikey.
   Extract Constant Prikey => "Big.big_int".
-  Extract Constant privatekey => "60245260967214266009141128892124363925".
+  Extract Constant privatekey =>
+  "Big.of_string ""60245260967214266009141128892124363925""".
 
 End KeyInstance.
 

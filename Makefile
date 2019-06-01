@@ -37,6 +37,6 @@ Main : main.ml
 #clean 
 clean:
 	rm -rf _build *.vo *.glob *.class *.cmi *.cmx *.o *.out BinInt.* BinNums.* BinPos.* Cand.ml Cand.mli  CryptoAxioms.ml CryptoAxioms.mli \
-		Datatypes.ml Datatypes.mli Encryptionschulze.ml Encryptionschulze.mli Keys.ml Keys.mli ListLemma.ml ListLemma.mli List.ml \
-		List.mli PeanoNat.ml PeanoNat.mli Schulze.ml Schulze.mli Specif.ml Specif.mli  Sumbool.ml  Sumbool.mli Top.ml Top.mli \
+		Datatypes.ml Datatypes.mli Encryptionschulze.ml Encryptionschulze.mli Keys.ml Keys.mli ListLemma.ml ListLemma.mli List0.ml \
+		List0.mli PeanoNat.ml PeanoNat.mli Schulze.ml Schulze.mli Specif.ml Specif.mli  Sumbool.ml  Sumbool.mli Top.ml Top.mli \
 		ValidityExist.ml ValidityExist.mli ZArith_dec.ml ZArith_dec.mli Zbool.ml Zbool.mli lib.ml lib.mli main.native main.byte schulze/*.class schulze/*.jar 2>/dev/null || true
